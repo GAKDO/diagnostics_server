@@ -25,6 +25,7 @@ import com.gakdo.trace.diagnostics.common.infra.PublicIds;
 import com.gakdo.trace.diagnostics.common.infra.Times;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CheckpointDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunCreated;
+import com.gakdo.trace.diagnostics.run.domain.BatteryReading;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticUpload;
 import com.gakdo.trace.diagnostics.run.domain.UploadRules;
@@ -138,8 +139,17 @@ public class DiagnosticRunService {
         // 플래그 계산(부품 변경·용량 급감·벤치 하락)은 DI2. DI1은 비교 기준만 싣는다
         events.publishRecorded(new DiagnosticsRecordedEvent(DiagnosticsRecordedEvent.SCHEMA_VERSION,
                 PublicIds.next(), now, rentalId, checkpointId, run.publicId(), sha256,
-                base.map(DiagnosticRun::publicId).orElse(null), List.of()));
+                base.map(DiagnosticRun::publicId).orElse(null), List.of(), maxCapacityPct(run)));
         return new RunCreated(run.publicId(), List.of());
+    }
+
+    /** 리포트용 배터리 최대 용량(서버 계산 값). 배터리가 없거나 용량을 못 읽었으면 null. */
+    static Double maxCapacityPct(DiagnosticRun run) {
+        BatteryReading b = run.battery();
+        if (b == null || BatteryReading.NO_BATTERY.equals(b.status()) || b.maxCapacityPct() == null) {
+            return null;
+        }
+        return b.maxCapacityPct().doubleValue();
     }
 
     /** 같은 키·같은 본문이면 처음 응답, 같은 키·다른 본문이면 422, 다른 키면 409. */
