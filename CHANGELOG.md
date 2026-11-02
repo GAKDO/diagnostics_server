@@ -7,4 +7,5 @@ main에 버전이 적힌 CHANGELOG가 올라가면 release.yml이 태그와 GitH
 ## [Unreleased]
 
 ### 추가
+- DI1 진단 수신·저장: `POST /api/v1/diagnostics/runs`(diag.v1 검증·원본 SHA-256·`trace.diagnostics.recorded`), 리포트용 `GET /api/v1/diagnostics/checkpoints/{checkpointId}`(배터리·SSD·직전 시점)
 - 블로그(AIGJ-01-002-blog/devlog) CI/CD를 옮겨 초기 구성

@@ -1,0 +1,68 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/GAKDO/contracts/main/events/trace.diagnostics.recorded.schema.json",
+  "title": "진단 저장·비교 완료",
+  "description": "diagnostics-server가 진단 JSON을 검증·저장하고 이전 시점 진단과 비교한 뒤 발행한다. report-server가 해시 체인에 진단 해시를 넣고 점검 플래그를 타임라인에 보인다. (FR-DIA, FR-INT-01)",
+  "x-routing-key": "trace.diagnostics.recorded",
+  "x-publisher": "diagnostics-server",
+  "x-consumers": [
+    {
+      "service": "report-server",
+      "queue": "trace.report.updates"
+    }
+  ],
+  "type": "object",
+  "allOf": [
+    {
+      "$ref": "envelope.schema.json#/$defs/Envelope"
+    }
+  ],
+  "required": [
+    "runId",
+    "sha256",
+    "baseRunId",
+    "flags"
+  ],
+  "properties": {
+    "runId": {
+      "$ref": "envelope.schema.json#/$defs/PublicId"
+    },
+    "sha256": {
+      "$ref": "envelope.schema.json#/$defs/Sha256",
+      "description": "원본 진단 JSON의 SHA-256(해시 체인 재료)"
+    },
+    "baseRunId": {
+      "anyOf": [
+        {
+          "$ref": "envelope.schema.json#/$defs/PublicId"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "비교 기준이 된 이전 시점 진단. 첫 진단(출고)은 null"
+    },
+    "flags": {
+      "type": "array",
+      "description": "점검 플래그. 비교 대상이 없거나 이상이 없으면 빈 배열",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "detail"
+        ],
+        "properties": {
+          "kind": {
+            "$ref": "../schemas/codes.gen.schema.json#/$defs/DiagnosticsFlagKind"
+          },
+          "detail": {
+            "type": "object",
+            "description": "플래그 근거(예: 바뀐 부품 식별자, 이전·현재 용량). 형식은 DI2가 정한다"
+          }
+        }
+      }
+    }
+  },
+  "unevaluatedProperties": false
+}

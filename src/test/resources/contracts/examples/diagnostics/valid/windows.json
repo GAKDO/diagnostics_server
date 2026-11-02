@@ -1,0 +1,146 @@
+{
+  "schemaVersion": "diag.v1",
+  "agentVersion": "0.1.0",
+  "collectedAt": "2026-11-06T15:10:05+09:00",
+  "consentedAt": "2026-11-06T15:11:40+09:00",
+  "os": {
+    "type": "WINDOWS",
+    "version": "10.0.22631",
+    "arch": "AMD64"
+  },
+  "device": {
+    "serial": "PF3TEST01",
+    "manufacturer": "LENOVO",
+    "model": "21CB",
+    "modelName": "ThinkPad X1 Carbon Gen 10"
+  },
+  "conditions": {
+    "acPower": true,
+    "batteryPercent": 88,
+    "thermalState": null,
+    "processCount": 241,
+    "uptimeSec": 7260
+  },
+  "components": [
+    {
+      "kind": "CPU",
+      "identifier": "12th Gen Intel(R) Core(TM) i7-1260P",
+      "detail": {
+        "cores": 12
+      }
+    },
+    {
+      "kind": "RAM",
+      "identifier": "16 GB",
+      "detail": {
+        "totalBytes": 17179869184
+      }
+    },
+    {
+      "kind": "SSD",
+      "identifier": "SAMSUNG MZVL2512HCJQ",
+      "detail": {
+        "capacityBytes": 512110190592
+      }
+    },
+    {
+      "kind": "BATTERY",
+      "identifier": "5B10W13975",
+      "detail": {}
+    },
+    {
+      "kind": "DISPLAY",
+      "identifier": "LEN40B2",
+      "detail": {
+        "resolution": "1920x1200"
+      }
+    }
+  ],
+  "battery": {
+    "status": "OK",
+    "skippedReason": null,
+    "cycleCount": null,
+    "designCapacity": {
+      "value": 57000,
+      "unit": "mWh"
+    },
+    "fullChargeCapacity": {
+      "value": 51230,
+      "unit": "mWh"
+    },
+    "osMaxCapacityPercent": null,
+    "osCondition": null
+  },
+  "storage": {
+    "status": "OK",
+    "skippedReason": null,
+    "protocol": "NVME",
+    "percentageUsed": 7,
+    "availableSpare": 100,
+    "criticalWarning": 0,
+    "mediaErrors": 0,
+    "powerOnHours": 2310
+  },
+  "benchmarks": [
+    {
+      "metric": "CPU_SINGLE",
+      "unit": "ops/s",
+      "trials": [
+        1021.3,
+        1018.9,
+        1025.0
+      ],
+      "median": 1021.3
+    },
+    {
+      "metric": "CPU_MULTI",
+      "unit": "ops/s",
+      "trials": [
+        6120.4,
+        6088.1,
+        6131.7
+      ],
+      "median": 6120.4
+    },
+    {
+      "metric": "MEM_COPY",
+      "unit": "MB/s",
+      "trials": [
+        41200,
+        40950,
+        41380
+      ],
+      "median": 41200
+    },
+    {
+      "metric": "DISK_READ",
+      "unit": "MB/s",
+      "trials": [
+        2810,
+        2795,
+        2830
+      ],
+      "median": 2810
+    },
+    {
+      "metric": "DISK_WRITE",
+      "unit": "MB/s",
+      "trials": [
+        2105,
+        2090,
+        2118
+      ],
+      "median": 2105
+    }
+  ],
+  "benchmarkSkippedReason": null,
+  "sources": [
+    "Get-CimInstance Win32_ComputerSystem",
+    "Get-CimInstance Win32_Processor",
+    "Get-CimInstance Win32_PhysicalMemory",
+    "Get-CimInstance Win32_BIOS",
+    "powercfg /batteryreport /xml",
+    "smartctl -j -a /dev/sda",
+    "trace-bench 0.1.0"
+  ]
+}
