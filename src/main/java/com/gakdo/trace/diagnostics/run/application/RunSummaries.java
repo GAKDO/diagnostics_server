@@ -34,7 +34,8 @@ final class RunSummaries {
             return null;
         }
         return new BatterySummary(b.cycleCount(), b.designCapacity(), b.fullChargeCapacity(), b.capacityUnit(),
-                b.maxCapacityPct() == null ? null : b.maxCapacityPct().doubleValue(), b.condition());
+                b.maxCapacityPct() == null ? null : b.maxCapacityPct().doubleValue(), b.condition(),
+                b.skippedReason());
     }
 
     private static SsdSummary ssd(SsdHealth s) {

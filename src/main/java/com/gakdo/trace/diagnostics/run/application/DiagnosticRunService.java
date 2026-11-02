@@ -126,12 +126,12 @@ public class DiagnosticRunService {
         if (existing.isPresent()) {
             return replayOrReject(existing.get(), idempotencyKey, sha256);
         }
-        Optional<DiagnosticRun> base = runs.findFirstByRentalIdOrderByIdDesc(rentalId);
-        if (base.isPresent() && !base.get().deviceSerial().equals(upload.device().serial())) {
-            // 렌탈 기기 시리얼은 rental-server 데이터라 묻지 않고, 같은 렌탈의 앞선 진단과 대조한다(clarify Q2)
-            throw new DomainException(ErrorCode.DEVICE_SERIAL_MISMATCH,
-                    "같은 렌탈의 앞선 진단과 기기 시리얼이 다릅니다.");
+        // 기기 시리얼은 관리자가 페어링 코드를 만들 때 정한 등록 시리얼(AGENT JWT deviceSerial 클레임)과 대조한다.
+        // 재전송(위)은 처음 요청이 이미 통과했으므로 먼저 판단하고, 새 저장만 여기서 막는다(contracts auth-server 0.2.0)
+        if (!caller.deviceSerial().equals(upload.device().serial())) {
+            throw new DomainException(ErrorCode.DEVICE_SERIAL_MISMATCH, "진단한 기기의 시리얼이 대여 기기와 다릅니다.");
         }
+        Optional<DiagnosticRun> base = runs.findFirstByRentalIdOrderByIdDesc(rentalId);
         OffsetDateTime now = Times.now();
         DiagnosticRun run = runs.saveAndFlush(DiagnosticRun.record(PublicIds.next(), checkpointId, rentalId,
                 idempotencyKey, upload, rawBody, sha256, now));

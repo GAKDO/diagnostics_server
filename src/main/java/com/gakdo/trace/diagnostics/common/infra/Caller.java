@@ -10,17 +10,19 @@ import com.gakdo.trace.diagnostics.common.domain.ErrorCode;
 /**
  * 요청한 토큰(auth-server AU1 클레임). 범위 판단은 여기 한 곳에서 한다.
  * <ul>
- * <li>AGENT: scope = checkpointId(= sub), rentalId = 렌탈 publicId (페어링 코드 교환으로 받음)</li>
+ * <li>AGENT: scope = checkpointId(= sub), rentalId = 렌탈 publicId, deviceSerial = 렌탈 기기 등록 시리얼
+ * (페어링 코드 교환으로 받음, contracts auth-server 0.2.0)</li>
  * <li>CUSTOMER: rentals = 본인 렌탈 publicId 목록. 촬영 JWT(scope 있음)는 진단 조회에 쓰지 못한다</li>
  * <li>ADMIN: 제한 없음(조회만)</li>
  * </ul>
  */
-public record Caller(String role, String scope, String rentalId, List<String> rentals) {
+public record Caller(String role, String scope, String rentalId, String deviceSerial, List<String> rentals) {
 
     public static Caller from(Jwt jwt) {
         List<String> rentals = jwt.hasClaim("rentals") ? jwt.getClaimAsStringList("rentals") : List.of();
         return new Caller(jwt.getClaimAsString("role"), jwt.getClaimAsString("scope"),
-                jwt.getClaimAsString("rentalId"), rentals == null ? List.of() : List.copyOf(rentals));
+                jwt.getClaimAsString("rentalId"), jwt.getClaimAsString("deviceSerial"),
+                rentals == null ? List.of() : List.copyOf(rentals));
     }
 
     public boolean isAdmin() {
@@ -32,9 +34,10 @@ public record Caller(String role, String scope, String rentalId, List<String> re
         return "CUSTOMER".equals(role) && PublicIds.isValid(scope);
     }
 
-    /** 진단 업로드는 시점·렌탈이 모두 NanoID인 AGENT 토큰만. 모자라면 403 FORBIDDEN. */
+    /** 진단 업로드는 시점·렌탈이 NanoID이고 기기 시리얼 클레임이 있는 AGENT 토큰만. 모자라면 403 FORBIDDEN. */
     public void requireAgent() {
-        if (!"AGENT".equals(role) || !PublicIds.isValid(scope) || !PublicIds.isValid(rentalId)) {
+        if (!"AGENT".equals(role) || !PublicIds.isValid(scope) || !PublicIds.isValid(rentalId)
+                || deviceSerial == null || deviceSerial.isBlank()) {
             throw new DomainException(ErrorCode.FORBIDDEN, "진단 에이전트 페어링 토큰만 올릴 수 있습니다.");
         }
     }

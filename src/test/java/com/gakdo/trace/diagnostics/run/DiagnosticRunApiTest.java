@@ -6,6 +6,9 @@ import static com.gakdo.trace.diagnostics.support.TestJwts.RENTAL;
 import static com.gakdo.trace.diagnostics.support.TestJwts.RETURN;
 import static com.gakdo.trace.diagnostics.support.TestJwts.admin;
 import static com.gakdo.trace.diagnostics.support.TestJwts.agent;
+import static com.gakdo.trace.diagnostics.support.TestJwts.MAC_SERIAL;
+import static com.gakdo.trace.diagnostics.support.TestJwts.PC_SERIAL;
+import static com.gakdo.trace.diagnostics.support.TestJwts.pcAgent;
 import static com.gakdo.trace.diagnostics.support.TestJwts.booth;
 import static com.gakdo.trace.diagnostics.support.TestJwts.capture;
 import static com.gakdo.trace.diagnostics.support.TestJwts.customer;
@@ -190,7 +193,7 @@ class DiagnosticRunApiTest extends WebTestBase {
     @Test
     @DisplayName("SSD를 권한이 없어 건너뛰면 201이고 값은 null, 사유는 그대로 저장된다")
     void skippedStorageIsStoredWithReason() throws Exception {
-        upload(Examples.bytes(Examples.SSD_SKIPPED), agent()).andExpect(status().isCreated());
+        upload(Examples.bytes(Examples.SSD_SKIPPED), pcAgent()).andExpect(status().isCreated());
         ArgumentCaptor<DiagnosticRun> saved = ArgumentCaptor.forClass(DiagnosticRun.class);
         verify(runs).saveAndFlush(saved.capture());
         assertThat(saved.getValue().ssd().status()).isEqualTo("SKIPPED");
@@ -214,13 +217,30 @@ class DiagnosticRunApiTest extends WebTestBase {
     }
 
     @Test
-    @DisplayName("같은 렌탈의 앞선 진단과 시리얼이 다르면 422 DEVICE_SERIAL_MISMATCH, 저장 안 함")
+    @DisplayName("진단한 기기 시리얼이 AGENT 토큰의 등록 시리얼과 다르면 422 DEVICE_SERIAL_MISMATCH, 저장·이벤트 없음")
     void serialMismatchIsRejected() throws Exception {
-        when(runs.findFirstByRentalIdOrderByIdDesc(RENTAL))
-                .thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.WINDOWS, "outbound-key-01")));
-        upload(Examples.bytes(Examples.MACOS), agent(RETURN, RENTAL))
+        upload(Examples.bytes(Examples.WINDOWS), agent(OUTBOUND, RENTAL, MAC_SERIAL))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("DEVICE_SERIAL_MISMATCH"));
+        verify(runs, never()).saveAndFlush(any());
+        verify(events, never()).publishRecorded(any());
+    }
+
+    @Test
+    @DisplayName("첫 진단이라도 등록 시리얼과 다르면 거부하고, 같으면 앞선 진단 없이도 저장한다")
+    void serialIsCheckedAgainstClaimEvenOnFirstRun() throws Exception {
+        upload(Examples.bytes(Examples.MACOS), agent(OUTBOUND, RENTAL, PC_SERIAL))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("DEVICE_SERIAL_MISMATCH"));
+        upload(Examples.bytes(Examples.WINDOWS), pcAgent()).andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("deviceSerial 클레임이 없는 AGENT 토큰(예전 페어링 코드)은 403 FORBIDDEN")
+    void agentWithoutSerialIsForbidden() throws Exception {
+        upload(Examples.bytes(Examples.MACOS), agent(OUTBOUND, RENTAL, null))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("FORBIDDEN"));
         verify(runs, never()).saveAndFlush(any());
     }
 
@@ -332,6 +352,27 @@ class DiagnosticRunApiTest extends WebTestBase {
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.current.battery").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("배터리를 읽지 못했으면 battery 값은 null이고 skippedReason에 사유 코드가 나온다")
+    void skippedBatteryShowsReason() throws Exception {
+        DiagnosticRun run = stored(OUTBOUND, RENTAL, Examples.modified(Examples.WINDOWS, n -> {
+            var b = (com.fasterxml.jackson.databind.node.ObjectNode) n.get("battery");
+            b.put("status", "SKIPPED");
+            b.put("skippedReason", "NO_PERMISSION");
+            b.putNull("cycleCount");
+            b.putNull("designCapacity");
+            b.putNull("fullChargeCapacity");
+            b.putNull("osMaxCapacityPercent");
+            b.putNull("osCondition");
+        }), KEY);
+        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(run));
+        mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.current.battery.skippedReason").value("NO_PERMISSION"))
+                .andExpect(jsonPath("$.current.battery.cycleCount").doesNotExist())
+                .andExpect(jsonPath("$.current.battery.maxCapacityPct").doesNotExist());
     }
 
     @Test

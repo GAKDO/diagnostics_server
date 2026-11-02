@@ -27,9 +27,12 @@ public final class DiagnosticResults {
             SsdSummary ssd, List<ComponentSummary> components, List<BenchmarkSummary> benchmarks) {
     }
 
-    /** 배터리. maxCapacityPct는 서버 계산(완충 ÷ 설계 × 100). 배터리가 없는 기기면 이 객체 대신 null */
+    /**
+     * 배터리. maxCapacityPct는 서버 계산(완충 ÷ 설계 × 100). 읽지 못했으면 값은 null이고 skippedReason에 사유 코드
+     * (contracts diagnostics-server 0.3.0). 배터리가 없는 기기면 이 객체 대신 null
+     */
     public record BatterySummary(Integer cycleCount, Integer designCapacity, Integer fullChargeCapacity,
-            String capacityUnit, Double maxCapacityPct, String condition) {
+            String capacityUnit, Double maxCapacityPct, String condition, String skippedReason) {
     }
 
     /** SSD. 읽지 못했으면 값은 null이고 skippedReason에 사유 코드 */
