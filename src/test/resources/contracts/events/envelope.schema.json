@@ -48,6 +48,30 @@
       "pattern": "^[^/].*",
       "description": "MinIO 객체 키(버킷 이름 제외, 앞 / 없음)"
     },
+    "DeviceModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["modelCode", "dimensions"],
+      "description": "찍은 기기의 기종과 3D 트윈 치수(mm). rental-server device_model의 값을 그대로 옮긴다. inspect-worker가 표준 좌표 크기(1 px = 0.25 mm)를 정한다.",
+      "properties": {
+        "modelCode": {
+          "type": "string",
+          "pattern": "^[A-Z0-9][A-Z0-9-]{1,63}$",
+          "description": "rental-server 기종 코드(예: MBA13-M2)"
+        },
+        "dimensions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["widthMm", "depthMm", "baseHMm", "lidHMm"],
+          "properties": {
+            "widthMm": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+            "depthMm": { "type": "number", "exclusiveMinimum": 0, "maximum": 1000 },
+            "baseHMm": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 },
+            "lidHMm": { "type": "number", "exclusiveMinimum": 0, "maximum": 100 }
+          }
+        }
+      }
+    },
     "ModelVersion": {
       "type": "string",
       "minLength": 1,

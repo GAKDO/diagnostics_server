@@ -1,5 +1,6 @@
 package com.gakdo.trace.diagnostics.run.application;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -146,10 +147,20 @@ public class DiagnosticRunService {
     /** 리포트용 배터리 최대 용량(서버 계산 값). 배터리가 없거나 용량을 못 읽었으면 null. */
     static Double maxCapacityPct(DiagnosticRun run) {
         BatteryReading b = run.battery();
-        if (b == null || BatteryReading.NO_BATTERY.equals(b.status()) || b.maxCapacityPct() == null) {
+        if (b == null || BatteryReading.NO_BATTERY.equals(b.status())) {
             return null;
         }
-        return b.maxCapacityPct().doubleValue();
+        return forEvent(b.maxCapacityPct());
+    }
+
+    /** 이벤트 상한(0~200%). 업로드는 999.99까지 받지만 200%를 넘는 값은 잘못 읽은 것이라 이벤트에는 null로 싣는다. */
+    static final BigDecimal EVENT_MAX_CAPACITY_PCT = new BigDecimal("200");
+
+    static Double forEvent(BigDecimal pct) {
+        if (pct == null || pct.signum() < 0 || pct.compareTo(EVENT_MAX_CAPACITY_PCT) > 0) {
+            return null;
+        }
+        return pct.doubleValue();
     }
 
     /** 같은 키·같은 본문이면 처음 응답, 같은 키·다른 본문이면 422, 다른 키면 409. */
