@@ -135,6 +135,8 @@ class DiagnosticRunApiTest extends WebTestBase {
         assertThat(event.checkpointId()).isEqualTo(OUTBOUND);
         assertThat(event.baseRunId()).isNull();
         assertThat(event.flags()).isEmpty();
+        assertThat(event.schemaVersion()).isEqualTo("1.1");
+        assertThat(event.maxCapacityPct()).isEqualTo(89.02); // 3901 ÷ 4382 × 100, 리포트 배터리 칸(1.1)
         assertThat(EventSchemas.validateRecorded(objectMapper.valueToTree(event))).isEmpty();
     }
 

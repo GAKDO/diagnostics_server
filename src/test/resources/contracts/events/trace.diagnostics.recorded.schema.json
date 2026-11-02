@@ -62,6 +62,15 @@
           }
         }
       }
+    },
+    "maxCapacityPct": {
+      "type": [
+        "number",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 200,
+      "description": "1.1 추가(선택). 이 진단의 배터리 최대 용량 %. 진단 JSON에 있는 값이 아니라 diagnostics-server가 battery.fullChargeCapacity ÷ battery.designCapacity × 100으로 계산한 값이다(OS가 보여 주는 battery.osMaxCapacityPercent와 다를 수 있고, 그 값은 싣지 않는다). 배터리가 없거나 용량을 못 읽었으면 null, 필드가 없으면 report-server는 null로 본다"
     }
   },
   "unevaluatedProperties": false

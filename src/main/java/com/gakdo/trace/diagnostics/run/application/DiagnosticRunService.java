@@ -1,5 +1,6 @@
 package com.gakdo.trace.diagnostics.run.application;
 
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -25,6 +26,7 @@ import com.gakdo.trace.diagnostics.common.infra.PublicIds;
 import com.gakdo.trace.diagnostics.common.infra.Times;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CheckpointDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunCreated;
+import com.gakdo.trace.diagnostics.run.domain.BatteryReading;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticUpload;
 import com.gakdo.trace.diagnostics.run.domain.UploadRules;
@@ -138,8 +140,27 @@ public class DiagnosticRunService {
         // 플래그 계산(부품 변경·용량 급감·벤치 하락)은 DI2. DI1은 비교 기준만 싣는다
         events.publishRecorded(new DiagnosticsRecordedEvent(DiagnosticsRecordedEvent.SCHEMA_VERSION,
                 PublicIds.next(), now, rentalId, checkpointId, run.publicId(), sha256,
-                base.map(DiagnosticRun::publicId).orElse(null), List.of()));
+                base.map(DiagnosticRun::publicId).orElse(null), List.of(), maxCapacityPct(run)));
         return new RunCreated(run.publicId(), List.of());
+    }
+
+    /** 리포트용 배터리 최대 용량(서버 계산 값). 배터리가 없거나 용량을 못 읽었으면 null. */
+    static Double maxCapacityPct(DiagnosticRun run) {
+        BatteryReading b = run.battery();
+        if (b == null || BatteryReading.NO_BATTERY.equals(b.status())) {
+            return null;
+        }
+        return forEvent(b.maxCapacityPct());
+    }
+
+    /** 이벤트 상한(0~200%). 업로드는 999.99까지 받지만 200%를 넘는 값은 잘못 읽은 것이라 이벤트에는 null로 싣는다. */
+    static final BigDecimal EVENT_MAX_CAPACITY_PCT = new BigDecimal("200");
+
+    static Double forEvent(BigDecimal pct) {
+        if (pct == null || pct.signum() < 0 || pct.compareTo(EVENT_MAX_CAPACITY_PCT) > 0) {
+            return null;
+        }
+        return pct.doubleValue();
     }
 
     /** 같은 키·같은 본문이면 처음 응답, 같은 키·다른 본문이면 422, 다른 키면 409. */
