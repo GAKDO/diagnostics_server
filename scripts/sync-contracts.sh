@@ -40,4 +40,6 @@ for f in "${!copies[@]}"; do
     echo "갱신: $f"
   fi
 done
-$check && echo "contracts 사본이 같습니다."
+if $check; then
+  echo "contracts 사본이 같습니다."
+fi

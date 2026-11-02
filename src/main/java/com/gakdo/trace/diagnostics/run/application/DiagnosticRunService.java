@@ -121,6 +121,7 @@ public class DiagnosticRunService {
             String sha256) {
         String checkpointId = caller.scope();
         String rentalId = caller.rentalId();
+        runs.lockRental(rentalId); // 같은 렌탈 업로드 직렬화: 앞선 진단 조회·시리얼 대조·저장이 한 번에 하나씩
         Optional<DiagnosticRun> existing = runs.findByCheckpointId(checkpointId);
         if (existing.isPresent()) {
             return replayOrReject(existing.get(), idempotencyKey, sha256);

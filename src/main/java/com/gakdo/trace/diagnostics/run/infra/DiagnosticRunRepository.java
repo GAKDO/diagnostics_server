@@ -3,10 +3,19 @@ package com.gakdo.trace.diagnostics.run.infra;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
 
 public interface DiagnosticRunRepository extends JpaRepository<DiagnosticRun, Long> {
+
+    /**
+     * 같은 렌탈의 업로드를 트랜잭션 동안 직렬화한다(PostgreSQL advisory lock, 트랜잭션이 끝나면 풀림).
+     * 서로 다른 시점의 첫 업로드가 동시에 와서 둘 다 "앞선 진단 없음"으로 읽고 시리얼 대조를 건너뛰지 않게 한다.
+     */
+    @Query(value = "SELECT 1 FROM pg_advisory_xact_lock(hashtext(:rentalId))", nativeQuery = true)
+    Integer lockRental(@Param("rentalId") String rentalId);
 
     Optional<DiagnosticRun> findByCheckpointId(String checkpointId);
 
