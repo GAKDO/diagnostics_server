@@ -25,7 +25,7 @@
 5. **주어진** 스키마로는 통과하지만 서버 규칙 위반: 두 용량 단위가 다름, median이 trials의 가운데 값이 아님, 같은 지표가 두 번 **그러면** 422 DIAGNOSTIC_SCHEMA_INVALID(필드 `battery.fullChargeCapacity.unit`·`benchmarks[i].median`·`benchmarks[i].metric`).
 6. **주어진** 본문이 JSON이 아님 **그러면** 400 VALIDATION_FAILED.
 7. **주어진** 배터리 `status: SKIPPED, skippedReason: NO_PERMISSION`이나 SSD SKIPPED, 벤치마크 `NO_AC_POWER` **그러면** 201, 값은 null로, 사유는 그대로 저장된다(생략 항목은 사유와 함께 저장된다).
-8. **주어진** 같은 렌탈의 앞선 진단과 `device.serial`이 다름 **그러면** 422 DEVICE_SERIAL_MISMATCH, 저장 안 함.
+8. **주어진** `device.serial`이 AGENT 토큰의 `deviceSerial`(렌탈 기기 등록 시리얼)과 다름 **그러면** 422 DEVICE_SERIAL_MISMATCH, 저장 안 함. `deviceSerial` 클레임이 없는 AGENT 토큰은 403 FORBIDDEN.
 
 ### 이야기 2 — 다시 보내기와 중복 (P1)
 
@@ -57,14 +57,14 @@ gateway는 역할까지만 막으므로 시점 범위는 서버가 토큰으로 
 ### 경계 상황
 - 동시에 같은 시점을 두 번 올리면 DB 유일 제약으로 하나만 저장되고 다른 하나는 409(같은 키면 처음 응답).
 - RabbitMQ 채널 트랜잭션은 DB 트랜잭션에 묶여(CA1과 같은 방식) DB가 롤백되면 이벤트도 나가지 않는다. 드물게 DB 커밋 뒤 Rabbit 커밋이 실패하면 이벤트만 빠진다(로그 ERROR, 아웃박스는 VI 단순하게 원칙으로 미룸).
-- 렌탈 기기 시리얼은 다른 서버의 데이터라 직접 읽지 않는다(서버끼리 REST 금지). 대신 같은 렌탈의 첫 진단 시리얼을 기준으로 삼는다(clarify Q2).
+- 렌탈 기기 시리얼은 다른 서버의 데이터라 직접 읽지 않는다(서버끼리 REST 금지). 관리자가 페어링 코드를 만들 때 정한 등록 시리얼이 AGENT 토큰 `deviceSerial` 클레임으로 오고, 그것과 대조한다(clarify Q2 갱신, contracts auth-server 0.2.0).
 
 ## 요구사항
 
 ### 기능 요구사항
 - **FR-001** AGENT 토큰만 업로드할 수 있고, 시점은 토큰 scope, 렌탈은 토큰 rentalId에서 읽는다(본문에 시점 없음).
 - **FR-002** 본문은 contracts `diag.v1` JSON Schema(2020-12)로 검증한다. 스키마 사본은 contracts에서 그대로 복사해 두고 `scripts/sync-contracts.sh`로 맞춘다.
-- **FR-003** 서버 규칙(스키마 밖): 두 용량 단위 일치, median = 정렬한 trials의 가운데 값, 지표 중복 금지, 같은 렌탈의 시리얼 일치.
+- **FR-003** 서버 규칙(스키마 밖): 두 용량 단위 일치, median = 정렬한 trials의 가운데 값, 지표 중복 금지, AGENT 토큰 deviceSerial과 시리얼 일치.
 - **FR-004** 원본 본문과 그 SHA-256(소문자 hex 64자)을 저장한다.
 - **FR-005** 실행·부품·배터리·SSD·벤치마크를 ddl.md diagnostics 표에 저장하고, 생략 사유(배터리·SSD·벤치마크)를 저장한다.
 - **FR-006** 저장과 같은 트랜잭션으로 `trace.diagnostics.recorded`를 낸다(message_id = eventId).
@@ -86,6 +86,7 @@ gateway는 역할까지만 막으므로 시점 범위는 서버가 토큰으로 
 ### Session 2026-11-02 (사용자 지시 "묻지 말고 진행"에 따라 추천안 채택)
 - Q1: 백로그(400·새 실행으로 쌓기)와 계약(422·409)이 다르면? → **계약을 따른다.** 계약이 C1·C2에서 나중에 정해졌고 11/3 고정 대상이다.
 - Q2: 렌탈 기기 시리얼을 어디서 얻나(AGENT 토큰에 없음)? → **같은 렌탈의 앞선 진단 시리얼과 대조**한다. 첫 진단(보통 출고)은 기준이 된다. 기기 등록 시리얼과의 대조는 AGENT 토큰에 deviceSerial 클레임이 생기면 더한다(후속, 사용자 확인).
+  - **갱신(11/2 민서 결정)**: AGENT 토큰에 `deviceSerial` 클레임을 넣고 그것과 대조한다(첫 진단도 대조). 앞선 진단과의 대조는 뺀다. 배터리 생략 사유도 응답 `BatterySummary.skippedReason`으로 내보낸다(contracts diagnostics-server 0.3.0).
 - Q3: 원본 진단 JSON을 MinIO(raw_object_key)에 둘까? → **DB에 원문 그대로(text) 둔다.** 수십 KB라 충분하고, 학교 MinIO는 학습 데이터 전용이다(11/2). raw_object_key는 NULL 허용으로 바꾼다.
 - Q4: "직전 시점"은? → 같은 렌탈에서 이 실행보다 먼저 저장된 가장 최근 실행(출고 → 수령 → 반납 순으로 올라온다).
 - Q5: 배터리 생략 사유는 조회 응답 어디에? → 계약 `BatterySummary`에 칸이 없어 **DB에만 저장**하고 응답에서는 값이 모두 null이다. 화면에 보여야 하면 계약에 `skippedReason`을 더하는 변경(값 추가)을 사용자에게 제안한다.

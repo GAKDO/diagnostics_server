@@ -5,6 +5,8 @@ import static com.gakdo.trace.diagnostics.support.TestJwts.RENTAL;
 import static com.gakdo.trace.diagnostics.support.TestJwts.RETURN;
 import static com.gakdo.trace.diagnostics.support.TestJwts.admin;
 import static com.gakdo.trace.diagnostics.support.TestJwts.agent;
+import static com.gakdo.trace.diagnostics.support.TestJwts.MAC_SERIAL;
+import static com.gakdo.trace.diagnostics.support.TestJwts.pcAgent;
 import static com.gakdo.trace.diagnostics.support.TestJwts.customer;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -67,7 +69,7 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
     @DisplayName("올린 진단은 실행·부품·배터리·SSD·벤치마크 행으로 저장되고 원본·해시·생략 사유가 남는다")
     void uploadIsStored() throws Exception {
         byte[] body = Examples.bytes(Examples.SSD_SKIPPED);
-        upload(body, agent(), "key-00000001").andExpect(status().isCreated());
+        upload(body, pcAgent(), "key-00000001").andExpect(status().isCreated());
 
         Map<String, Object> run = jdbc.queryForMap("SELECT * FROM diagnostics.diagnostic_run");
         assertThat(run.get("checkpoint_id")).isEqualTo(OUTBOUND);
@@ -131,10 +133,10 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
     }
 
     @Test
-    @DisplayName("같은 렌탈의 다음 시점에 다른 기기 시리얼이면 422 DEVICE_SERIAL_MISMATCH")
+    @DisplayName("반납 시점에 등록 시리얼과 다른 기기를 진단하면 422 DEVICE_SERIAL_MISMATCH")
     void serialMismatchOnRealDatabase() throws Exception {
         upload(Examples.bytes(Examples.MACOS), agent(OUTBOUND, RENTAL), "key-00000001").andExpect(status().isCreated());
-        upload(Examples.bytes(Examples.WINDOWS), agent(RETURN, RENTAL), "key-00000002")
+        upload(Examples.bytes(Examples.WINDOWS), agent(RETURN, RENTAL, MAC_SERIAL), "key-00000002")
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("DEVICE_SERIAL_MISMATCH"));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnostics.diagnostic_run", Integer.class)).isEqualTo(1);

@@ -14,15 +14,31 @@ public final class TestJwts {
     public static final String OTHER_RENTAL = "Z4U03wInx137yk13jDsmn";
     public static final String OUTBOUND = "IPv6mcQOlTkKj6mOecAQt";
     public static final String RETURN = "h40b9AN9xMQhXRHrOyJWB";
+    /** 계약 예시의 기기 시리얼: macos.json, windows.json·ssd-skipped.json */
+    public static final String MAC_SERIAL = "C02TEST00001";
+    public static final String PC_SERIAL = "PF3TEST01";
 
     private TestJwts() {
     }
 
-    /** 페어링 코드 교환으로 받은 AGENT 토큰(sub = scope = checkpointId, rentalId). */
+    /** 페어링 코드 교환으로 받은 AGENT 토큰(sub = scope = checkpointId, rentalId, deviceSerial). */
+    public static JwtRequestPostProcessor agent(String checkpointId, String rentalId, String deviceSerial) {
+        return jwt().jwt(j -> {
+            j.subject(checkpointId).claim("role", "AGENT").claim("scope", checkpointId).claim("rentalId", rentalId);
+            if (deviceSerial != null) {
+                j.claim("deviceSerial", deviceSerial);
+            }
+        }).authorities(new SimpleGrantedAuthority("ROLE_AGENT"));
+    }
+
+    /** macos.json 기기(MAC_SERIAL)를 빌린 렌탈의 AGENT 토큰. */
     public static JwtRequestPostProcessor agent(String checkpointId, String rentalId) {
-        return jwt().jwt(j -> j.subject(checkpointId).claim("role", "AGENT").claim("scope", checkpointId)
-                .claim("rentalId", rentalId))
-                .authorities(new SimpleGrantedAuthority("ROLE_AGENT"));
+        return agent(checkpointId, rentalId, MAC_SERIAL);
+    }
+
+    /** windows.json·ssd-skipped.json 기기(PC_SERIAL)를 빌린 렌탈의 AGENT 토큰. */
+    public static JwtRequestPostProcessor pcAgent() {
+        return agent(OUTBOUND, RENTAL, PC_SERIAL);
     }
 
     public static JwtRequestPostProcessor agent() {
