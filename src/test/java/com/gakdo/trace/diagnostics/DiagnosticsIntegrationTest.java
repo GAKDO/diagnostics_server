@@ -72,21 +72,23 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
         upload(body, pcAgent(), "key-00000001").andExpect(status().isCreated());
 
         Map<String, Object> run = jdbc.queryForMap("SELECT * FROM diagnostics.diagnostic_run");
-        assertThat(run).containsEntry("checkpoint_id", OUTBOUND);
-        assertThat(run).containsEntry("rental_id", RENTAL);
-        assertThat(run).containsEntry("device_serial", "PF3TEST01");
-        assertThat(run).containsEntry("os", "WINDOWS");
-        assertThat(run).containsEntry("sha256",
-                HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body)));
-        assertThat(run).containsEntry("raw_body", new String(body, java.nio.charset.StandardCharsets.UTF_8));
+        String sha256 = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body));
+        assertThat(run)
+                .containsEntry("checkpoint_id", OUTBOUND)
+                .containsEntry("rental_id", RENTAL)
+                .containsEntry("device_serial", "PF3TEST01")
+                .containsEntry("os", "WINDOWS")
+                .containsEntry("sha256", sha256)
+                .containsEntry("raw_body", new String(body, java.nio.charset.StandardCharsets.UTF_8));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnostics.hardware_component", Integer.class))
                 .isPositive();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnostics.benchmark_result", Integer.class))
                 .isEqualTo(5);
         Map<String, Object> ssd = jdbc.queryForMap("SELECT * FROM diagnostics.ssd_health");
-        assertThat(ssd).containsEntry("status", "SKIPPED");
-        assertThat(ssd).containsEntry("skipped_reason", "NO_PERMISSION");
-        assertThat(ssd).containsEntry("percent_used", null);
+        assertThat(ssd)
+                .containsEntry("status", "SKIPPED")
+                .containsEntry("skipped_reason", "NO_PERMISSION")
+                .containsEntry("percent_used", null);
         Map<String, Object> battery = jdbc.queryForMap("SELECT * FROM diagnostics.battery_reading");
         assertThat(battery).containsEntry("capacity_unit", "mWh");
         assertThat(battery.get("max_capacity_pct")).isNotNull();
