@@ -72,23 +72,23 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
         upload(body, pcAgent(), "key-00000001").andExpect(status().isCreated());
 
         Map<String, Object> run = jdbc.queryForMap("SELECT * FROM diagnostics.diagnostic_run");
-        assertThat(run.get("checkpoint_id")).isEqualTo(OUTBOUND);
-        assertThat(run.get("rental_id")).isEqualTo(RENTAL);
-        assertThat(run.get("device_serial")).isEqualTo("PF3TEST01");
-        assertThat(run.get("os")).isEqualTo("WINDOWS");
-        assertThat(run.get("sha256")).isEqualTo(
+        assertThat(run).containsEntry("checkpoint_id", OUTBOUND);
+        assertThat(run).containsEntry("rental_id", RENTAL);
+        assertThat(run).containsEntry("device_serial", "PF3TEST01");
+        assertThat(run).containsEntry("os", "WINDOWS");
+        assertThat(run).containsEntry("sha256",
                 HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body)));
-        assertThat((String) run.get("raw_body")).isEqualTo(new String(body, java.nio.charset.StandardCharsets.UTF_8));
+        assertThat(run).containsEntry("raw_body", new String(body, java.nio.charset.StandardCharsets.UTF_8));
         assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnostics.hardware_component", Integer.class))
                 .isPositive();
         assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnostics.benchmark_result", Integer.class))
                 .isEqualTo(5);
         Map<String, Object> ssd = jdbc.queryForMap("SELECT * FROM diagnostics.ssd_health");
-        assertThat(ssd.get("status")).isEqualTo("SKIPPED");
-        assertThat(ssd.get("skipped_reason")).isEqualTo("NO_PERMISSION");
-        assertThat(ssd.get("percent_used")).isNull();
+        assertThat(ssd).containsEntry("status", "SKIPPED");
+        assertThat(ssd).containsEntry("skipped_reason", "NO_PERMISSION");
+        assertThat(ssd).containsEntry("percent_used", null);
         Map<String, Object> battery = jdbc.queryForMap("SELECT * FROM diagnostics.battery_reading");
-        assertThat(battery.get("capacity_unit")).isEqualTo("mWh");
+        assertThat(battery).containsEntry("capacity_unit", "mWh");
         assertThat(battery.get("max_capacity_pct")).isNotNull();
         verify(events, times(1)).publishRecorded(any());
     }

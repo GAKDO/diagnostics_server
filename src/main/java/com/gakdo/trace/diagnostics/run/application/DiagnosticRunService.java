@@ -135,8 +135,8 @@ public class DiagnosticRunService {
         }
         Optional<DiagnosticRun> base = runs.findFirstByRentalIdOrderByIdDesc(rentalId);
         OffsetDateTime now = Times.now();
-        DiagnosticRun run = runs.saveAndFlush(DiagnosticRun.record(PublicIds.next(), checkpointId, rentalId,
-                idempotencyKey, upload, rawBody, sha256, now));
+        DiagnosticRun run = runs.saveAndFlush(DiagnosticRun.of(PublicIds.next(), checkpointId, rentalId,
+                idempotencyKey, upload, new DiagnosticRun.RawBody(rawBody, sha256), now));
         // 플래그 계산(부품 변경·용량 급감·벤치 하락)은 DI2. DI1은 비교 기준만 싣는다
         events.publishRecorded(new DiagnosticsRecordedEvent(DiagnosticsRecordedEvent.SCHEMA_VERSION,
                 PublicIds.next(), now, rentalId, checkpointId, run.publicId(), sha256,
