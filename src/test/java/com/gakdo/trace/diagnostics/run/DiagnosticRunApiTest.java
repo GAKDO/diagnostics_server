@@ -445,8 +445,9 @@ class DiagnosticRunApiTest extends WebTestBase {
     private DiagnosticRun stored(String checkpointId, String rentalId, byte[] body, String key) throws Exception {
         DiagnosticUpload upload = objectMapper.readValue(body, DiagnosticUpload.class);
         String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(body));
-        return withId(DiagnosticRun.record(com.gakdo.trace.diagnostics.common.infra.PublicIds.next(), checkpointId,
-                rentalId, key, upload, new String(body, StandardCharsets.UTF_8), sha, Times.now()));
+        return withId(DiagnosticRun.of(com.gakdo.trace.diagnostics.common.infra.PublicIds.next(), checkpointId,
+                rentalId, key, upload, new DiagnosticRun.RawBody(new String(body, StandardCharsets.UTF_8), sha),
+                Times.now()));
     }
 
     private DiagnosticRun withId(DiagnosticRun run) throws Exception {

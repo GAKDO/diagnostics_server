@@ -98,9 +98,13 @@ public class DiagnosticRun {
     protected DiagnosticRun() {
     }
 
+    /** 저장할 원본 본문과 그 바이트의 SHA-256(소문자 hex). */
+    public record RawBody(String text, String sha256) {
+    }
+
     /** 검증을 마친 본문으로 실행을 만든다. 시점·렌탈은 토큰에서, 해시는 원본 바이트에서 온다. */
-    public static DiagnosticRun record(String publicId, String checkpointId, String rentalId, String idempotencyKey,
-            DiagnosticUpload upload, String rawBody, String sha256, OffsetDateTime now) {
+    public static DiagnosticRun of(String publicId, String checkpointId, String rentalId, String idempotencyKey,
+            DiagnosticUpload upload, RawBody raw, OffsetDateTime now) {
         DiagnosticRun run = new DiagnosticRun();
         run.publicId = publicId;
         run.checkpointId = checkpointId;
@@ -110,8 +114,8 @@ public class DiagnosticRun {
         run.os = upload.os().type();
         run.agentVersion = upload.agentVersion();
         run.conditions = upload.conditions();
-        run.rawBody = rawBody;
-        run.sha256 = sha256;
+        run.rawBody = raw.text();
+        run.sha256 = raw.sha256();
         run.benchmarkSkippedReason = upload.benchmarkSkippedReason();
         run.collectedAt = upload.collectedAt();
         run.consentedAt = upload.consentedAt();
