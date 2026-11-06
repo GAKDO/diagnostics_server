@@ -109,7 +109,7 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
     }
 
     @Test
-    @DisplayName("출고·반납 두 시점을 올리면 반납 조회 한 번으로 두 시점의 배터리·SSD를 받는다")
+    @DisplayName("출고·반납 두 시점을 올리면 반납 조회 한 번으로 두 시점의 배터리·SSD와 용량 하락 플래그를 받는다")
     void twoCheckpointsInOneQuery() throws Exception {
         String outbound = runId(upload(Examples.bytes(Examples.MACOS), agent(OUTBOUND, RENTAL), "key-00000001")
                 .andExpect(status().isCreated()));
@@ -128,7 +128,10 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
                 .andExpect(jsonPath("$.previous.runId").value(outbound))
                 .andExpect(jsonPath("$.previous.battery.maxCapacityPct").value(89.02))
                 .andExpect(jsonPath("$.previous.ssd.percentUsed").value(3))
-                .andExpect(jsonPath("$.flags").isEmpty());
+                // 89.02% → 84.0%는 5.02%p 하락이라 flag-rules-v1의 CAPACITY_DROP(5%p 이상)에 걸린다
+                .andExpect(jsonPath("$.flags.length()").value(1))
+                .andExpect(jsonPath("$.flags[0].kind").value("CAPACITY_DROP"))
+                .andExpect(jsonPath("$.flags[0].baseRunId").value(outbound));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.previous").doesNotExist());
