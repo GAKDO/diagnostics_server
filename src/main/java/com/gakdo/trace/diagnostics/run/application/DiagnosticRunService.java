@@ -32,6 +32,8 @@ import com.gakdo.trace.diagnostics.run.domain.DiagnosticUpload;
 import com.gakdo.trace.diagnostics.run.domain.UploadRules;
 import com.gakdo.trace.diagnostics.run.infra.DiagnosticRunRepository;
 import com.gakdo.trace.diagnostics.run.infra.InspectionFlagRepository;
+import com.gakdo.trace.diagnostics.run.domain.FlagRules;
+import com.gakdo.trace.diagnostics.run.domain.InspectionFlag;
 
 /**
  * 진단 업로드(FR-DIA-01~05 서버 쪽)와 시점 진단 조회(FR-DIA-06 틀, 리포트의 배터리·SSD 표시).
@@ -137,11 +139,18 @@ public class DiagnosticRunService {
         OffsetDateTime now = Times.now();
         DiagnosticRun run = runs.saveAndFlush(DiagnosticRun.of(PublicIds.next(), checkpointId, rentalId,
                 idempotencyKey, upload, new DiagnosticRun.RawBody(rawBody, sha256), now));
-        // 플래그 계산(부품 변경·용량 급감·벤치 하락)은 DI2. DI1은 비교 기준만 싣는다
+        // 점검 플래그(DI2, FlagRules): 같은 렌탈 바로 앞 진단과 비교. 첫 진단(출고)은 기준이 없어 빈 배열
+        List<InspectionFlag> saved = base
+                .map(b -> FlagRules.compare(b, run).stream()
+                        .map(d -> new InspectionFlag(run, b, d.kind(), d.detail(), now)).toList())
+                .orElse(List.of());
+        flags.saveAll(saved);
         events.publishRecorded(new DiagnosticsRecordedEvent(DiagnosticsRecordedEvent.SCHEMA_VERSION,
                 PublicIds.next(), now, rentalId, checkpointId, run.publicId(), sha256,
-                base.map(DiagnosticRun::publicId).orElse(null), List.of(), maxCapacityPct(run)));
-        return new RunCreated(run.publicId(), List.of());
+                base.map(DiagnosticRun::publicId).orElse(null),
+                saved.stream().map(f -> new DiagnosticsRecordedEvent.Flag(f.kind(), f.detail())).toList(),
+                maxCapacityPct(run)));
+        return new RunCreated(run.publicId(), RunSummaries.flags(saved));
     }
 
     /** 리포트용 배터리 최대 용량(서버 계산 값). 배터리가 없거나 용량을 못 읽었으면 null. */
