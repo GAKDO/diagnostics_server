@@ -24,7 +24,12 @@ public final class DiagnosticResults {
     }
 
     public record RunSummary(String runId, OffsetDateTime collectedAt, String os, BatterySummary battery,
-            SsdSummary ssd, List<ComponentSummary> components, List<BenchmarkSummary> benchmarks) {
+            SsdSummary ssd, List<ComponentSummary> components, List<BenchmarkSummary> benchmarks,
+            RunChecks checks) {
+    }
+
+    /** RunChecks: 잠금·디스크 상태(11/7 추가). 옛 에이전트 진단은 RunSummary.checks가 null */
+    public record RunChecks(String activationLock, String diskEncryption, String osDiskHealth) {
     }
 
     /**

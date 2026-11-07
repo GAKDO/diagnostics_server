@@ -53,6 +53,11 @@ public class DiagnosticRun {
     @Column(name = "conditions", nullable = false)
     private Map<String, Object> conditions;
 
+    /** 진단 JSON checks 그대로(활성화 잠금·디스크 암호화·OS 디스크 상태). 옛 에이전트 진단은 null */
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "checks")
+    private DiagnosticUpload.Checks checks;
+
     @Column(name = "raw_object_key", length = 512)
     private String rawObjectKey;
 
@@ -114,6 +119,7 @@ public class DiagnosticRun {
         run.os = upload.os().type();
         run.agentVersion = upload.agentVersion();
         run.conditions = upload.conditions();
+        run.checks = upload.checks();
         run.rawBody = raw.text();
         run.sha256 = raw.sha256();
         run.benchmarkSkippedReason = upload.benchmarkSkippedReason();
@@ -186,5 +192,9 @@ public class DiagnosticRun {
 
     public SsdHealth ssd() {
         return ssd;
+    }
+
+    public DiagnosticUpload.Checks checks() {
+        return checks;
     }
 }

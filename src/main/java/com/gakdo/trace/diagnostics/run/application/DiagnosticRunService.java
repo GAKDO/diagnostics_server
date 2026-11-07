@@ -139,11 +139,13 @@ public class DiagnosticRunService {
         OffsetDateTime now = Times.now();
         DiagnosticRun run = runs.saveAndFlush(DiagnosticRun.of(PublicIds.next(), checkpointId, rentalId,
                 idempotencyKey, upload, new DiagnosticRun.RawBody(rawBody, sha256), now));
-        // 점검 플래그(DI2, FlagRules): 같은 렌탈 바로 앞 진단과 비교. 첫 진단(출고)은 기준이 없어 빈 배열
-        List<InspectionFlag> saved = base
+        // 점검 플래그(DI2, FlagRules): 같은 렌탈 바로 앞 진단과 비교. 첫 진단(출고)은 기준이 없어 비교 플래그 없음
+        List<InspectionFlag> saved = new java.util.ArrayList<>(base
                 .map(b -> FlagRules.compare(b, run).stream()
                         .map(d -> new InspectionFlag(run, b, d.kind(), d.detail(), now)).toList())
-                .orElse(List.of());
+                .orElse(List.of()));
+        // 상태 플래그(잠금·디스크): 비교 대상이 없으므로 기준(baseRun)은 이번 진단 자신(contracts InspectionFlag 설명)
+        FlagRules.states(run).forEach(d -> saved.add(new InspectionFlag(run, run, d.kind(), d.detail(), now)));
         flags.saveAll(saved);
         events.publishRecorded(new DiagnosticsRecordedEvent(DiagnosticsRecordedEvent.SCHEMA_VERSION,
                 PublicIds.next(), now, rentalId, checkpointId, run.publicId(), sha256,

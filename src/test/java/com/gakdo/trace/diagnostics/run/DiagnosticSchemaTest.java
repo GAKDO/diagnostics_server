@@ -19,7 +19,8 @@ class DiagnosticSchemaTest {
     private final NetworkntDiagnosticSchema schema = new NetworkntDiagnosticSchema();
 
     @ParameterizedTest
-    @ValueSource(strings = {"valid/macos.json", "valid/windows.json", "valid/ssd-skipped.json"})
+    @ValueSource(strings = {"valid/macos.json", "valid/windows.json", "valid/ssd-skipped.json", "valid/macos-checks.json",
+            "valid/windows-checks-unknown.json"})
     @DisplayName("contracts valid 예시는 diag.v1 스키마를 통과한다")
     void validExamplesPass(String name) {
         assertThat(schema.validate(Examples.node(name))).isEmpty();
@@ -27,7 +28,7 @@ class DiagnosticSchemaTest {
 
     @ParameterizedTest
     @ValueSource(strings = {"invalid/benchmark-without-ac-power.json", "invalid/capacity-without-unit.json",
-            "invalid/computer-name.json", "invalid/skipped-without-reason.json"})
+            "invalid/computer-name.json", "invalid/skipped-without-reason.json", "invalid/checks-bad-value.json"})
     @DisplayName("contracts invalid 예시는 스키마에 맞지 않아 거부된다")
     void invalidExamplesFail(String name) {
         assertThat(schema.validate(Examples.node(name))).isNotEmpty();

@@ -102,4 +102,25 @@ class FlagRulesTest {
         DiagnosticRun now = run(n -> n.putArray("benchmarks"));
         assertThat(FlagRules.compare(base, now)).isEmpty();
     }
+
+    @Test
+    @DisplayName("활성화 잠금·디스크 암호화가 켜지고 SSD가 경고면 앞 진단 없이도 상태 플래그 3개가 붙는다")
+    void lockedDeviceGetsStateFlags() throws Exception {
+        DiagnosticRun now = run(n -> n.putObject("checks").put("activationLock", "ON").put("diskEncryption", "ON")
+                .put("osDiskHealth", "WARNING"));
+        assertThat(FlagRules.states(now)).extracting(FlagRules.Draft::kind).containsExactly(
+                FlagRules.ACTIVATION_LOCK_ON, FlagRules.DISK_ENCRYPTION_ON, FlagRules.DISK_HEALTH_WARNING);
+        assertThat(FlagRules.states(now).get(0).detail()).containsEntry("field", "activationLock")
+                .containsEntry("value", "ON").containsEntry("os", "MACOS");
+    }
+
+    @Test
+    @DisplayName("잠금이 꺼져 있거나 못 읽었거나 checks가 없는 옛 진단이면 상태 플래그가 없다")
+    void unlockedOrUnknownNoStateFlags() throws Exception {
+        assertThat(FlagRules.states(run(n -> n.putObject("checks").put("activationLock", "OFF")
+                .put("diskEncryption", "OFF").put("osDiskHealth", "OK")))).isEmpty();
+        assertThat(FlagRules.states(run(n -> n.putObject("checks").putNull("activationLock")
+                .putNull("diskEncryption").putNull("osDiskHealth")))).isEmpty();
+        assertThat(FlagRules.states(run(n -> { }))).isEmpty();
+    }
 }

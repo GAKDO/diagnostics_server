@@ -21,7 +21,12 @@ public record DiagnosticUpload(
         Storage storage,
         List<Benchmark> benchmarks,
         String benchmarkSkippedReason,
-        List<String> sources) {
+        List<String> sources,
+        Checks checks) {
+
+    /** 잠금·디스크 상태(11/7 추가, 선택). 칸이 없는 옛 진단은 checks 자체가 null, 못 읽은 값은 각각 null */
+    public record Checks(String activationLock, String diskEncryption, String osDiskHealth) {
+    }
 
     public record Os(String type, String version, String arch) {
     }
