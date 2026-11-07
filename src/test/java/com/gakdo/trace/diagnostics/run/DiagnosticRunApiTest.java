@@ -141,6 +141,22 @@ class DiagnosticRunApiTest extends WebTestBase {
     }
 
     @Test
+    @DisplayName("활성화 잠금이 켜진 첫 진단(출고)도 ACTIVATION_LOCK_ON 플래그가 붙고 baseRunId는 이번 진단 자신이다")
+    void lockedOutboundGetsStateFlag() throws Exception {
+        byte[] body = Examples.bytes("valid/macos-checks.json"); // activationLock ON, diskEncryption OFF, osDiskHealth OK
+        String runId = runIdOf(upload(body, agent()).andExpect(status().isCreated())
+                .andExpect(jsonPath("$.flags.length()").value(1))
+                .andExpect(jsonPath("$.flags[0].kind").value("ACTIVATION_LOCK_ON")));
+        DiagnosticsRecordedEvent event = publishedEvent();
+        assertThat(event.flags()).extracting(DiagnosticsRecordedEvent.Flag::kind).containsExactly("ACTIVATION_LOCK_ON");
+        assertThat(EventSchemas.validateRecorded(objectMapper.valueToTree(event))).isEmpty();
+        ArgumentCaptor<DiagnosticRun> saved = ArgumentCaptor.forClass(DiagnosticRun.class);
+        verify(runs).saveAndFlush(saved.capture());
+        assertThat(saved.getValue().checks().activationLock()).isEqualTo("ON");
+        assertThat(saved.getValue().publicId()).isEqualTo(runId);
+    }
+
+    @Test
     @DisplayName("같은 렌탈에 앞선 진단이 있으면 이벤트 baseRunId는 바로 앞 실행의 runId")
     void baseRunIdIsPreviousRun() throws Exception {
         DiagnosticRun outbound = stored(OUTBOUND, RENTAL, Examples.MACOS, "outbound-key-01");

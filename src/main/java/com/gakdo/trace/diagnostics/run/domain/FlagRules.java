@@ -19,6 +19,14 @@ import java.util.TreeSet;
  * </ul>
  * 임계값은 설계서대로 파일럿 1차 측정 편차로 다시 정한다. 그 전까지는 3회 측정 편차(agent #3 기준 수 %)보다 넉넉히 둔다.
  * 비교할 값이 한쪽이라도 없으면(생략·못 읽음) 그 항목은 플래그를 붙이지 않는다.
+ * <p>
+ * 상태 플래그({@link #states})는 비교 없이 이번 진단의 checks만 본다(11/7 계약 추가). 첫 진단(출고)에도 붙는다.
+ * <ul>
+ * <li>ACTIVATION_LOCK_ON: macOS 활성화 잠금(나의 Mac 찾기)이 켜짐</li>
+ * <li>DISK_ENCRYPTION_ON: FileVault·BitLocker가 켜짐</li>
+ * <li>DISK_HEALTH_WARNING: OS가 본 SSD SMART 상태가 정상이 아님</li>
+ * </ul>
+ * 못 읽은 값(null)이나 checks가 없는 옛 진단은 플래그를 붙이지 않는다.
  */
 public final class FlagRules {
 
@@ -29,6 +37,10 @@ public final class FlagRules {
     public static final String COMPONENT_CHANGED = "COMPONENT_CHANGED";
     public static final String CAPACITY_DROP = "CAPACITY_DROP";
     public static final String BENCH_DROP = "BENCH_DROP";
+    public static final String ACTIVATION_LOCK_ON = "ACTIVATION_LOCK_ON";
+    public static final String DISK_ENCRYPTION_ON = "DISK_ENCRYPTION_ON";
+    public static final String DISK_HEALTH_WARNING = "DISK_HEALTH_WARNING";
+    public static final String STATES_VERSION = "state-rules-v1";
 
     private FlagRules() {
     }
@@ -43,6 +55,34 @@ public final class FlagRules {
         capacityDrop(base.battery(), current.battery()).ifPresent(drafts::add);
         drafts.addAll(benchDrops(base.benchmarks(), current.benchmarks()));
         return drafts;
+    }
+
+    /** 이번 진단의 잠금·디스크 상태 플래그. 앞 진단이 없어도 붙는다. */
+    public static List<Draft> states(DiagnosticRun current) {
+        DiagnosticUpload.Checks c = current.checks();
+        List<Draft> drafts = new ArrayList<>();
+        if (c == null) {
+            return drafts;
+        }
+        if ("ON".equals(c.activationLock())) {
+            drafts.add(state(ACTIVATION_LOCK_ON, "activationLock", c.activationLock(), current.os()));
+        }
+        if ("ON".equals(c.diskEncryption())) {
+            drafts.add(state(DISK_ENCRYPTION_ON, "diskEncryption", c.diskEncryption(), current.os()));
+        }
+        if ("WARNING".equals(c.osDiskHealth())) {
+            drafts.add(state(DISK_HEALTH_WARNING, "osDiskHealth", c.osDiskHealth(), current.os()));
+        }
+        return drafts;
+    }
+
+    private static Draft state(String kind, String field, String value, String os) {
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("rule", STATES_VERSION);
+        detail.put("field", field);
+        detail.put("value", value);
+        detail.put("os", os);
+        return new Draft(kind, detail);
     }
 
     static List<Draft> componentChanges(List<HardwareComponent> before, List<HardwareComponent> after) {

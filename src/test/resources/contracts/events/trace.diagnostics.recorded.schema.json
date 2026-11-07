@@ -44,7 +44,7 @@
     },
     "flags": {
       "type": "array",
-      "description": "점검 플래그. 비교 대상이 없거나 이상이 없으면 빈 배열",
+      "description": "점검 플래그. 이상이 없으면 빈 배열. 비교 플래그(COMPONENT_CHANGED·CAPACITY_DROP·BENCH_DROP)는 앞 진단이 있을 때만, 상태 플래그(ACTIVATION_LOCK_ON·DISK_ENCRYPTION_ON·DISK_HEALTH_WARNING, 11/7 추가)는 첫 진단에도 붙는다",
       "items": {
         "type": "object",
         "additionalProperties": false,

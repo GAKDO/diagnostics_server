@@ -6,6 +6,7 @@ import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.BatterySumm
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.BenchmarkSummary;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.ComponentSummary;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.Flag;
+import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunChecks;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunSummary;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.SsdSummary;
 import com.gakdo.trace.diagnostics.run.domain.BatteryReading;
@@ -22,7 +23,10 @@ final class RunSummaries {
     static RunSummary of(DiagnosticRun run) {
         return new RunSummary(run.publicId(), run.collectedAt(), run.os(), battery(run.battery()), ssd(run.ssd()),
                 run.components().stream().map(c -> new ComponentSummary(c.kind(), c.identifier())).toList(),
-                run.benchmarks().stream().map(b -> new BenchmarkSummary(b.metric(), b.median())).toList());
+                run.benchmarks().stream().map(b -> new BenchmarkSummary(b.metric(), b.median())).toList(),
+                run.checks() == null ? null
+                        : new RunChecks(run.checks().activationLock(), run.checks().diskEncryption(),
+                                run.checks().osDiskHealth()));
     }
 
     static List<Flag> flags(List<InspectionFlag> flags) {
