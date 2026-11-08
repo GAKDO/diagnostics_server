@@ -19,6 +19,13 @@ public class JdbcRunPurgeStore implements RunPurgeStore {
 
     @Override
     public int deleteCheckpoint(String checkpointId) {
+        // 이벤트의 시리얼(TEST-)만 믿지 않는다. 이 시점에 저장된 진단의 기기 시리얼이 시험 기기가 아니면 지우지 않는다
+        // (같은 브로커 계정을 쓰는 다른 구성요소가 실제 고객 시점의 진단을 지우지 못하게)
+        Integer real = jdbc.queryForObject("select count(*) from diagnostics.diagnostic_run where checkpoint_id = ?"
+                + " and device_serial not like 'TEST-%'", Integer.class, checkpointId);
+        if (real != null && real > 0) {
+            return 0;
+        }
         jdbc.update("delete from diagnostics.inspection_flag where checkpoint_id = ? or run_id in (" + RUNS
                 + ") or base_run_id in (" + RUNS + ")", checkpointId, checkpointId, checkpointId);
         for (String table : new String[] {"hardware_component", "battery_reading", "ssd_health", "benchmark_result"}) {
