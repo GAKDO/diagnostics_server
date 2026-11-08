@@ -8,6 +8,7 @@ import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -34,6 +35,8 @@ import com.gakdo.trace.diagnostics.run.infra.DiagnosticRunRepository;
 import com.gakdo.trace.diagnostics.run.infra.InspectionFlagRepository;
 import com.gakdo.trace.diagnostics.run.domain.FlagRules;
 import com.gakdo.trace.diagnostics.run.domain.InspectionFlag;
+import com.gakdo.trace.diagnostics.trend.application.DiagnosticsTrend;
+import com.gakdo.trace.diagnostics.trend.application.DiagnosticsTrendRecorded;
 
 /**
  * 진단 업로드(FR-DIA-01~05 서버 쪽)와 시점 진단 조회(FR-DIA-06 틀, 리포트의 배터리·SSD 표시).
@@ -50,15 +53,18 @@ public class DiagnosticRunService {
     private final DiagnosticsEventPublisher events;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate tx;
+    private final ApplicationEventPublisher appEvents;
 
     public DiagnosticRunService(DiagnosticRunRepository runs, InspectionFlagRepository flags, DiagnosticSchema schema,
-            DiagnosticsEventPublisher events, ObjectMapper objectMapper, PlatformTransactionManager txManager) {
+            DiagnosticsEventPublisher events, ObjectMapper objectMapper, PlatformTransactionManager txManager,
+            ApplicationEventPublisher appEvents) {
         this.runs = runs;
         this.flags = flags;
         this.schema = schema;
         this.events = events;
         this.objectMapper = objectMapper;
         this.tx = new TransactionTemplate(txManager);
+        this.appEvents = appEvents;
     }
 
     /**
@@ -152,6 +158,9 @@ public class DiagnosticRunService {
                 base.map(DiagnosticRun::publicId).orElse(null),
                 saved.stream().map(f -> new DiagnosticsRecordedEvent.Flag(f.kind(), f.detail())).toList(),
                 maxCapacityPct(run)));
+        // 추이(InfluxDB): 값은 트랜잭션 안에서 뽑고, 쓰기는 커밋된 뒤에 한다(TrendListener, AFTER_COMMIT)
+        appEvents.publishEvent(new DiagnosticsTrendRecorded(
+                DiagnosticsTrend.of(run, upload.device().model(), saved.size())));
         return new RunCreated(run.publicId(), RunSummaries.flags(saved));
     }
 
