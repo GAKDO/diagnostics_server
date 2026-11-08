@@ -141,6 +141,25 @@ class DiagnosticRunApiTest extends WebTestBase {
     }
 
     @Test
+    @DisplayName("공개 진단 요약은 로그인 없이 배터리·벤치마크를 주고, 부품·잠금·시리얼은 싣지 않으며 잘못된 ID는 400")
+    void publicCatalogHidesComponents() throws Exception {
+        upload(Examples.bytes(Examples.MACOS), agent()).andExpect(status().isCreated());
+        ArgumentCaptor<DiagnosticRun> saved = ArgumentCaptor.forClass(DiagnosticRun.class);
+        verify(runs).saveAndFlush(saved.capture());
+        when(runs.findByCheckpointIdIn(any())).thenReturn(List.of(saved.getValue()));
+
+        mvc.perform(get("/api/v1/diagnostics/catalog?checkpointIds=" + OUTBOUND + "," + OUTBOUND))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].checkpointId").value(OUTBOUND))
+                .andExpect(jsonPath("$.items[0].battery.maxCapacityPct").value(89.02))
+                .andExpect(jsonPath("$.items[0].benchmarks").isArray())
+                .andExpect(jsonPath("$.items[0].components").doesNotExist())
+                .andExpect(jsonPath("$.items[0].checks").doesNotExist())
+                .andExpect(jsonPath("$.items[0].runId").doesNotExist());
+        mvc.perform(get("/api/v1/diagnostics/catalog?checkpointIds=bad")).andExpect(status().isBadRequest());
+    }
+
+    @Test
     @DisplayName("활성화 잠금이 켜진 첫 진단(출고)도 ACTIVATION_LOCK_ON 플래그가 붙고 baseRunId는 이번 진단 자신이다")
     void lockedOutboundGetsStateFlag() throws Exception {
         byte[] body = Examples.bytes("valid/macos-checks.json"); // activationLock ON, diskEncryption OFF, osDiskHealth OK

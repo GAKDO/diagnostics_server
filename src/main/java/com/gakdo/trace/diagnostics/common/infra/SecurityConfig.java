@@ -44,6 +44,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.GET, "/api/v1/diagnostics/ping").permitAll()
                         .requestMatchers("/actuator/health/**", "/actuator/health", "/actuator/info").permitAll()
+                        // 공개 보유 기기 목록(11/8): 로그인 없이 배터리·SSD·벤치마크만
+                        .requestMatchers(HttpMethod.GET, "/api/v1/diagnostics/catalog").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/diagnostics/runs").hasRole(AGENT)
                         .requestMatchers(HttpMethod.GET, "/api/v1/diagnostics/checkpoints/*").hasAnyRole(ADMIN, CUSTOMER)
                         // 시점·렌탈 범위는 컨트롤러가 Caller로 다시 본다(gateway는 역할까지만, decisions.md 11/2)

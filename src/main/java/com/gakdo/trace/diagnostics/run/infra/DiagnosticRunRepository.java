@@ -1,5 +1,7 @@
 package com.gakdo.trace.diagnostics.run.infra;
 
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,6 +20,9 @@ public interface DiagnosticRunRepository extends JpaRepository<DiagnosticRun, Lo
     Integer lockRental(@Param("rentalId") String rentalId);
 
     Optional<DiagnosticRun> findByCheckpointId(String checkpointId);
+
+    /** 공개 기기 목록(11/8): 여러 시점의 진단을 한 번에. */
+    List<DiagnosticRun> findByCheckpointIdIn(Collection<String> checkpointIds);
 
     /** 같은 렌탈의 가장 최근 실행(새로 올릴 때의 비교 기준). */
     Optional<DiagnosticRun> findFirstByRentalIdOrderByIdDesc(String rentalId);

@@ -3,8 +3,10 @@ package com.gakdo.trace.diagnostics.run.application;
 import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -24,7 +26,9 @@ import com.gakdo.trace.diagnostics.common.infra.Caller;
 import com.gakdo.trace.diagnostics.common.infra.Hashes;
 import com.gakdo.trace.diagnostics.common.infra.PublicIds;
 import com.gakdo.trace.diagnostics.common.infra.Times;
+import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CatalogDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CheckpointDiagnostics;
+import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunSummary;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunCreated;
 import com.gakdo.trace.diagnostics.run.domain.BatteryReading;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
@@ -78,6 +82,21 @@ public class DiagnosticRunService {
                     .map(existing -> replayOrReject(existing, idempotencyKey, sha256))
                     .orElseThrow(() -> race));
         }
+    }
+
+    /**
+     * 공개 보유 기기 목록의 진단(로그인 없음, contracts listCatalogDiagnostics, 11/8 민서 요청).
+     * 부품 식별자·점검 플래그·잠금 상태·시리얼은 싣지 않고, 진단이 없는 시점은 뺀다.
+     */
+    @Transactional(readOnly = true)
+    public List<CatalogDiagnostics> catalog(Collection<String> checkpointIds) {
+        return runs.findByCheckpointIdIn(Set.copyOf(checkpointIds)).stream()
+                .map(run -> {
+                    RunSummary s = RunSummaries.of(run);
+                    return new CatalogDiagnostics(run.checkpointId(), s.collectedAt(), s.os(), s.battery(), s.ssd(),
+                            s.benchmarks());
+                })
+                .toList();
     }
 
     /** 시점의 진단 요약, 같은 렌탈 직전 시점 요약, 점검 플래그. */
