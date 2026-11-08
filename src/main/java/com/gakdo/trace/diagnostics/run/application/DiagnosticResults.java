@@ -48,6 +48,11 @@ public final class DiagnosticResults {
     public record ComponentSummary(String kind, String identifier) {
     }
 
+    /** 공개 진단 요약(contracts CatalogDiagnostics, 11/8): RunSummary에서 runId·부품·잠금 상태를 뺀 것. */
+    public record CatalogDiagnostics(String checkpointId, OffsetDateTime collectedAt, String os, BatterySummary battery,
+            SsdSummary ssd, List<BenchmarkSummary> benchmarks) {
+    }
+
     public record BenchmarkSummary(String metric, double median) {
     }
 }

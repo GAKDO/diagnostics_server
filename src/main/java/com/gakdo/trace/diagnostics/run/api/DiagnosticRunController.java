@@ -1,5 +1,7 @@
 package com.gakdo.trace.diagnostics.run.api;
 
+import java.util.List;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -11,10 +13,12 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.gakdo.trace.diagnostics.common.infra.Caller;
 import com.gakdo.trace.diagnostics.common.infra.PublicIds;
+import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CatalogDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CheckpointDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunCreated;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticRunService;
@@ -40,6 +44,16 @@ public class DiagnosticRunController {
             @RequestHeader("Idempotency-Key") @Size(min = 8, max = 128) String idempotencyKey,
             @RequestBody byte[] body) {
         return ResponseEntity.status(HttpStatus.CREATED).body(service.upload(Caller.from(jwt), idempotencyKey, body));
+    }
+
+    public record CatalogDiagnosticsList(List<CatalogDiagnostics> items) {
+    }
+
+    /** 공개 보유 기기 목록의 진단(로그인 없음, 11/8). checkpointIds는 쉼표로 이은 값이고 Spring이 목록으로 나눈다. */
+    @GetMapping(path = "/api/v1/diagnostics/catalog", produces = MediaType.APPLICATION_JSON_VALUE)
+    public CatalogDiagnosticsList catalog(
+            @RequestParam @Size(min = 1, max = 100) List<@Pattern(regexp = PublicIds.PATTERN) String> checkpointIds) {
+        return new CatalogDiagnosticsList(service.catalog(checkpointIds));
     }
 
     @GetMapping(path = "/api/v1/diagnostics/checkpoints/{checkpointId}", produces = MediaType.APPLICATION_JSON_VALUE)
