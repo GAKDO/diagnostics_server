@@ -29,8 +29,6 @@ curl http://localhost:8080/api/v1/diagnostics/ping
 
 환경 변수: `POSTGRES_HOST`·`POSTGRES_PORT`·`POSTGRES_DB`, `DB_USERNAME`·`DB_PASSWORD`, `RABBITMQ_HOST`·`RABBITMQ_PORT`·`RABBITMQ_VHOST`·`RABBITMQ_USERNAME`·`RABBITMQ_PASSWORD`, `AUTH_JWKS_URI`(또는 `AUTH_SERVER_URL`).
 
-진단 추이(선택): `INFLUX_URL`(예: `http://<InfluxDB 주소>:8086`, 비면 쓰지 않음)·`INFLUX_TOKEN`·`INFLUX_ORG`·`INFLUX_BUCKET`(기본 `trace-pilot`). 진단 저장이 커밋되면 measurement `diagnostics_run`(태그 deviceSerial·os·deviceModel, 필드 배터리·SSD·벤치마크 중앙값·플래그 수)을 `/api/v2/write`로 보내고, 실패해도 업로드는 성공합니다.
-
 ## 테스트
 
 ```bash

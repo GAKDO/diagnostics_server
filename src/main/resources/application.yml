@@ -45,14 +45,6 @@ app:
   version: '@project.version@'
   jwt:
     issuer: trace
-  # 진단 추이(InfluxDB v2, 버킷 trace-pilot). INFLUX_URL이 비면 쓰지 않는다(기본 꺼짐, 학교 서버 Compose는 그대로 뜬다)
-  influx:
-    url: ${INFLUX_URL:}
-    token: ${INFLUX_TOKEN:}
-    org: ${INFLUX_ORG:}
-    bucket: ${INFLUX_BUCKET:trace-pilot}
-    connect-timeout: 2s
-    read-timeout: 3s
 
 management:
   endpoints:
