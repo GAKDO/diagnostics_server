@@ -91,11 +91,7 @@ public class DiagnosticRunService {
     @Transactional(readOnly = true)
     public List<CatalogDiagnostics> catalog(Collection<String> checkpointIds) {
         return runs.findByCheckpointIdIn(Set.copyOf(checkpointIds)).stream()
-                .map(run -> {
-                    RunSummary s = RunSummaries.of(run);
-                    return new CatalogDiagnostics(run.checkpointId(), s.collectedAt(), s.os(), s.battery(), s.ssd(),
-                            s.benchmarks());
-                })
+                .map(RunSummaries::catalog)
                 .toList();
     }
 

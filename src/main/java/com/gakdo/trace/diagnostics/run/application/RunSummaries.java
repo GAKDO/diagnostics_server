@@ -29,6 +29,13 @@ final class RunSummaries {
                                 run.checks().osDiskHealth()));
     }
 
+    /** 공개 목록용: 부품·점검 결과는 읽지 않는다(지연 로딩 컬렉션을 건드리지 않게). */
+    static DiagnosticResults.CatalogDiagnostics catalog(DiagnosticRun run) {
+        return new DiagnosticResults.CatalogDiagnostics(run.checkpointId(), run.collectedAt(), run.os(),
+                battery(run.battery()), ssd(run.ssd()),
+                run.benchmarks().stream().map(b -> new BenchmarkSummary(b.metric(), b.median())).toList());
+    }
+
     static List<Flag> flags(List<InspectionFlag> flags) {
         return flags.stream().map(f -> new Flag(f.kind(), f.baseRun().publicId(), f.detail())).toList();
     }
