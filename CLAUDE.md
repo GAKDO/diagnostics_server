@@ -28,7 +28,7 @@ TRACE의 진단 검증·비교·점검 플래그·추이 레포입니다. 담당
 `/speckit-plan` 뒤에 그대로 붙여 넣습니다.
 
 ```
-Java 21, Spring Boot 3.5.7, Maven(./mvnw). Spring Web MVC, Spring Data JPA, PostgreSQL 스키마 diagnostics, Flyway(src/main/resources/db/migration, 이 서버 스키마만, GAKDO/docs db/V1__init.sql의 해당 절에서 시작), Spring Security OAuth2 리소스 서버(auth-server JWKS 검증), 진단 JSON 검증은 contracts의 JSON Schema(networknt json-schema-validator), 추이는 InfluxDB 클라이언트(버킷 trace-pilot), Spring AMQP(trace.events), Bean Validation, ProblemDetail(RFC 9457). 테스트는 JUnit 5 + Spring Boot Test + Testcontainers(PostgreSQL·RabbitMQ), JaCoCo 라인 커버리지 40% 이상. Claude 클라우드 세션에는 Docker가 없으므로 Testcontainers 테스트는 @Testcontainers(disabledWithoutDocker = true)로 두어 세션에서는 건너뛰고 GitHub Actions에서 돌게 하며, 도메인 로직은 Docker 없이 도는 단위 테스트로도 덮는다. 패키지는 com.gakdo.trace.diagnostics 아래 기능별. 기존 ping·application.yml·Dockerfile을 유지하고, 주소·비밀은 환경 변수로 받는다(gitops infra.env, trace-secrets의 이름).
+Java 21, Spring Boot 3.5.7, Maven(./mvnw). Spring Web MVC, Spring Data JPA, PostgreSQL 스키마 diagnostics, Flyway(src/main/resources/db/migration, 이 서버 스키마만, GAKDO/docs db/V1__init.sql의 해당 절에서 시작), Spring Security OAuth2 리소스 서버(auth-server JWKS 검증), 진단 JSON 검증은 contracts의 JSON Schema(networknt json-schema-validator), InfluxDB는 쓰지 않음(11/6 결정, 추이는 web이 저장된 진단을 모아 그림), Spring AMQP(trace.events), Bean Validation, ProblemDetail(RFC 9457). 테스트는 JUnit 5 + Spring Boot Test + Testcontainers(PostgreSQL·RabbitMQ), JaCoCo 라인 커버리지 40% 이상. Claude 클라우드 세션에는 Docker가 없으므로 Testcontainers 테스트는 @Testcontainers(disabledWithoutDocker = true)로 두어 세션에서는 건너뛰고 GitHub Actions에서 돌게 하며, 도메인 로직은 Docker 없이 도는 단위 테스트로도 덮는다. 패키지는 com.gakdo.trace.diagnostics 아래 기능별. 기존 ping·application.yml·Dockerfile을 유지하고, 주소·비밀은 환경 변수로 받는다(gitops infra.env, trace-secrets의 이름).
 ```
 
 ## 팀 운영 (모든 세션)

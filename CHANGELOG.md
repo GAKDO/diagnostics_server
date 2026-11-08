@@ -10,6 +10,5 @@ main에 버전이 적힌 CHANGELOG가 올라가면 release.yml이 태그와 GitH
 - 시리얼 대조를 같은 렌탈 앞선 진단 → AGENT 토큰 `deviceSerial`(렌탈 기기 등록 시리얼)로 바꿈. 클레임 없는 AGENT 토큰은 403. 시점 조회의 배터리에 `skippedReason` (contracts auth-server 0.2.0·diagnostics-server 0.3.0, 11/2 결정)
 
 ### 추가
-- 진단 추이 InfluxDB 쓰기(DI2): 진단 저장 커밋 뒤 measurement `diagnostics_run`을 `/api/v2/write`로 보냄. `INFLUX_URL`이 비면 no-op, 실패는 경고 로그만
 - DI1 진단 수신·저장: `POST /api/v1/diagnostics/runs`(diag.v1 검증·원본 SHA-256·`trace.diagnostics.recorded`), 리포트용 `GET /api/v1/diagnostics/checkpoints/{checkpointId}`(배터리·SSD·직전 시점)
 - 블로그(AIGJ-01-002-blog/devlog) CI/CD를 옮겨 초기 구성
