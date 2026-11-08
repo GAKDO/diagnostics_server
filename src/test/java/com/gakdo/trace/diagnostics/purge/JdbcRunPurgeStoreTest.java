@@ -34,7 +34,18 @@ class JdbcRunPurgeStoreTest {
     @DisplayName("저장된 진단이 모두 TEST- 시리얼이면 지운다")
     void testDeviceIsPurged() {
         when(jdbc.queryForObject(anyString(), eq(Integer.class), eq(CP))).thenReturn(0);
-        when(jdbc.update(eq("delete from diagnostics.diagnostic_run where checkpoint_id = ?"), eq(CP))).thenReturn(1);
+        when(jdbc.update(eq("delete from diagnostics.diagnostic_run where checkpoint_id = ?"
+                + " and device_serial like 'TEST-%'"), eq(CP))).thenReturn(1);
         assertThat(store.deleteCheckpoint(CP)).isEqualTo(1);
+    }
+
+    @Test
+    @DisplayName("검사 뒤 실제 기기 진단이 끼어들어도 지우는 문장마다 TEST- 시리얼만 고른다")
+    void everyDeleteFiltersTestSerial() {
+        when(jdbc.queryForObject(anyString(), eq(Integer.class), eq(CP))).thenReturn(0);
+        store.deleteCheckpoint(CP);
+        org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
+        verify(jdbc, org.mockito.Mockito.atLeastOnce()).update(sql.capture(), any(Object[].class));
+        assertThat(sql.getAllValues()).isNotEmpty().allMatch(q -> q.contains("device_serial like 'TEST-%'"));
     }
 }

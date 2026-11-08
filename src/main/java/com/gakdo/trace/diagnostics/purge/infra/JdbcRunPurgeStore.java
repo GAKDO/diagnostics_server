@@ -9,7 +9,9 @@ import com.gakdo.trace.diagnostics.purge.application.RunPurgeStore;
 @Repository
 public class JdbcRunPurgeStore implements RunPurgeStore {
 
-    private static final String RUNS = "select id from diagnostics.diagnostic_run where checkpoint_id = ?";
+    /** 시험 기기 진단만. 문장마다 저장된 시리얼로 다시 거르므로 검사 뒤 실제 기기 업로드가 끼어들어도 지우지 않는다. */
+    private static final String RUNS = "select id from diagnostics.diagnostic_run where checkpoint_id = ?"
+            + " and device_serial like 'TEST-%'";
 
     private final JdbcTemplate jdbc;
 
@@ -26,11 +28,12 @@ public class JdbcRunPurgeStore implements RunPurgeStore {
         if (real != null && real > 0) {
             return 0;
         }
-        jdbc.update("delete from diagnostics.inspection_flag where checkpoint_id = ? or run_id in (" + RUNS
-                + ") or base_run_id in (" + RUNS + ")", checkpointId, checkpointId, checkpointId);
+        jdbc.update("delete from diagnostics.inspection_flag where run_id in (" + RUNS
+                + ") or base_run_id in (" + RUNS + ")", checkpointId, checkpointId);
         for (String table : new String[] {"hardware_component", "battery_reading", "ssd_health", "benchmark_result"}) {
             jdbc.update("delete from diagnostics." + table + " where run_id in (" + RUNS + ")", checkpointId);
         }
-        return jdbc.update("delete from diagnostics.diagnostic_run where checkpoint_id = ?", checkpointId);
+        return jdbc.update("delete from diagnostics.diagnostic_run where checkpoint_id = ?"
+                + " and device_serial like 'TEST-%'", checkpointId);
     }
 }
