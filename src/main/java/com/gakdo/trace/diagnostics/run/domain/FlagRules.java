@@ -143,11 +143,10 @@ public final class FlagRules {
         for (BenchmarkResult now : after) {
             BenchmarkResult was = before.stream().filter(b -> Objects.equals(b.metric(), now.metric()))
                     .findFirst().orElse(null);
-            if (was == null || was.median() <= 0) {
-                continue;
-            }
-            double dropPct = (was.median() - now.median()) / was.median() * 100.0;
-            if (dropPct < BENCH_DROP_PCT) {
+            // 앞 기록이 없거나 0이면 비교하지 않는다. 비교할 수 있을 때만 하락률을 구한다
+            double dropPct = (was == null || was.median() <= 0) ? 0.0
+                    : (was.median() - now.median()) / was.median() * 100.0;
+            if (was == null || dropPct < BENCH_DROP_PCT) {
                 continue;
             }
             Map<String, Object> detail = new LinkedHashMap<>();

@@ -43,9 +43,10 @@ class PurgeEventListenerTest {
     @Test
     @DisplayName("시리얼이 TEST-가 아니거나 JSON이 깨졌으면 지우지 않고 DLX로 보낸다")
     void refusesRealOrBroken() {
-        assertThatThrownBy(() -> listener.handle(event("C02REAL0001"))).isInstanceOf(AmqpRejectAndDontRequeueException.class);
-        assertThatThrownBy(() -> listener.handle("{".getBytes(StandardCharsets.UTF_8)))
-                .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        byte[] real = event("C02REAL0001");
+        byte[] broken = "{".getBytes(StandardCharsets.UTF_8);
+        assertThatThrownBy(() -> listener.handle(real)).isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        assertThatThrownBy(() -> listener.handle(broken)).isInstanceOf(AmqpRejectAndDontRequeueException.class);
         verify(store, never()).deleteCheckpoint(any());
     }
 
@@ -53,6 +54,7 @@ class PurgeEventListenerTest {
     @DisplayName("DB 오류는 다시 넣지 않고 DLX로 보낸다(재전달 무한 반복 방지)")
     void dbErrorGoesToDlx() {
         when(store.deleteCheckpoint(CP)).thenThrow(new IllegalStateException("db"));
-        assertThatThrownBy(() -> listener.handle(event("TEST-0002"))).isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        byte[] test = event("TEST-0002");
+        assertThatThrownBy(() -> listener.handle(test)).isInstanceOf(AmqpRejectAndDontRequeueException.class);
     }
 }
