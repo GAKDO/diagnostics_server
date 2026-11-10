@@ -34,8 +34,8 @@ class JdbcRunPurgeStoreTest {
     @DisplayName("저장된 진단이 모두 TEST- 시리얼이면 지운다")
     void testDeviceIsPurged() {
         when(jdbc.queryForObject(anyString(), eq(Integer.class), eq(CP))).thenReturn(0);
-        when(jdbc.update(eq("delete from diagnostics.diagnostic_run where checkpoint_id = ?"
-                + " and device_serial like 'TEST-%'"), eq(CP))).thenReturn(1);
+        when(jdbc.update("delete from diagnostics.diagnostic_run where checkpoint_id = ?"
+                + " and device_serial like 'TEST-%'", CP)).thenReturn(1);
         assertThat(store.deleteCheckpoint(CP)).isEqualTo(1);
     }
 
