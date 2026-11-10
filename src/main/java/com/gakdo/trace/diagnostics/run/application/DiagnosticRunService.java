@@ -28,7 +28,6 @@ import com.gakdo.trace.diagnostics.common.infra.PublicIds;
 import com.gakdo.trace.diagnostics.common.infra.Times;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CatalogDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CheckpointDiagnostics;
-import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunSummary;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunCreated;
 import com.gakdo.trace.diagnostics.run.domain.BatteryReading;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
