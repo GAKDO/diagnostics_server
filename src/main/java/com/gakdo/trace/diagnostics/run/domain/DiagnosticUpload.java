@@ -24,8 +24,12 @@ public record DiagnosticUpload(
         List<String> sources,
         Checks checks) {
 
-    /** 잠금·디스크 상태(11/7 추가, 선택). 칸이 없는 옛 진단은 checks 자체가 null, 못 읽은 값은 각각 null */
-    public record Checks(String activationLock, String diskEncryption, String osDiskHealth) {
+    /**
+     * 잠금·디스크 상태(11/7 추가, 선택). 칸이 없는 옛 진단은 checks 자체가 null, 못 읽은 값은 각각 null.
+     * securityProtection(ON·OFF)·threatCount(Defender 위협 탐지 건수)는 11/12 추가 선택 필드라 옛 진단에는 없다(null).
+     */
+    public record Checks(String activationLock, String diskEncryption, String osDiskHealth,
+            String securityProtection, Integer threatCount) {
     }
 
     public record Os(String type, String version, String arch) {

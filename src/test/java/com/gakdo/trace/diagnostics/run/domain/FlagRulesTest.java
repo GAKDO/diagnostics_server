@@ -123,4 +123,54 @@ class FlagRulesTest {
                 .putNull("diskEncryption").putNull("osDiskHealth")))).isEmpty();
         assertThat(FlagRules.states(run(n -> { }))).isEmpty();
     }
+
+    private static DiagnosticRun threats(Integer count) throws Exception {
+        return run(n -> {
+            ObjectNode c = n.putObject("checks").putNull("activationLock").putNull("diskEncryption")
+                    .putNull("osDiskHealth");
+            if (count == null) {
+                c.putNull("threatCount");
+            } else {
+                c.put("threatCount", count);
+            }
+        });
+    }
+
+    @Test
+    @DisplayName("보안 보호가 꺼져 있으면 앞 진단 없이도 SECURITY_PROTECTION_OFF가 붙고 켜져 있으면 없다")
+    void securityOffGetsStateFlag() throws Exception {
+        DiagnosticRun off = run(n -> n.putObject("checks").putNull("activationLock").putNull("diskEncryption")
+                .putNull("osDiskHealth").put("securityProtection", "OFF"));
+        assertThat(FlagRules.states(off)).extracting(FlagRules.Draft::kind)
+                .containsExactly(FlagRules.SECURITY_PROTECTION_OFF);
+        DiagnosticRun on = run(n -> n.putObject("checks").putNull("activationLock").putNull("diskEncryption")
+                .putNull("osDiskHealth").put("securityProtection", "ON"));
+        assertThat(FlagRules.states(on)).isEmpty();
+    }
+
+    @Test
+    @DisplayName("위협 건수가 앞 진단보다 늘면 THREAT_DETECTED가 붙고 기준은 앞 진단이며 근거에 앞뒤 건수가 있다")
+    void threatIncreaseIsFlagged() throws Exception {
+        var flag = FlagRules.threat(threats(1), threats(3)).orElseThrow();
+        assertThat(flag.compared()).isTrue();
+        assertThat(flag.draft().kind()).isEqualTo(FlagRules.THREAT_DETECTED);
+        assertThat(flag.draft().detail()).containsEntry("before", 1).containsEntry("after", 3);
+    }
+
+    @Test
+    @DisplayName("대여 전부터 있던 위협 기록이 그대로면 반납 때 다시 붙지 않는다")
+    void sameThreatCountNotFlagged() throws Exception {
+        assertThat(FlagRules.threat(threats(2), threats(2))).isEmpty();
+    }
+
+    @Test
+    @DisplayName("첫 진단이나 앞 건수를 못 읽었으면 위협이 1건 이상일 때만 붙고 기준은 이번 진단이다")
+    void firstRunThreatsFlaggedWithoutBase() throws Exception {
+        var first = FlagRules.threat(null, threats(1)).orElseThrow();
+        assertThat(first.compared()).isFalse();
+        assertThat(FlagRules.threat(threats(null), threats(2)).orElseThrow().compared()).isFalse();
+        assertThat(FlagRules.threat(null, threats(0))).isEmpty();
+        assertThat(FlagRules.threat(threats(0), threats(null))).isEmpty();
+        assertThat(FlagRules.threat(null, run(n -> { }))).isEmpty();
+    }
 }

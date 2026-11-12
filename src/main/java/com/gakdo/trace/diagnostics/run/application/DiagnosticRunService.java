@@ -160,6 +160,9 @@ public class DiagnosticRunService {
                 .orElse(List.of()));
         // 상태 플래그(잠금·디스크): 비교 대상이 없으므로 기준(baseRun)은 이번 진단 자신(contracts InspectionFlag 설명)
         FlagRules.states(run).forEach(d -> saved.add(new InspectionFlag(run, run, d.kind(), d.detail(), now)));
+        // 위협 건수(11/12): 앞 진단보다 늘었으면 기준은 앞 진단, 비교할 값이 없으면 이번 진단 자신
+        FlagRules.threat(base.orElse(null), run).ifPresent(t -> saved.add(new InspectionFlag(run,
+                t.compared() ? base.orElseThrow() : run, t.draft().kind(), t.draft().detail(), now)));
         flags.saveAll(saved);
         events.publishRecorded(new DiagnosticsRecordedEvent(DiagnosticsRecordedEvent.SCHEMA_VERSION,
                 PublicIds.next(), now, rentalId, checkpointId, run.publicId(), sha256,

@@ -25,7 +25,10 @@ import java.util.TreeSet;
  * <li>ACTIVATION_LOCK_ON: macOS 활성화 잠금(나의 Mac 찾기)이 켜짐</li>
  * <li>DISK_ENCRYPTION_ON: FileVault·BitLocker가 켜짐</li>
  * <li>DISK_HEALTH_WARNING: OS가 본 SSD SMART 상태가 정상이 아님</li>
+ * <li>SECURITY_PROTECTION_OFF: OS 기본 보안 보호(Defender 백신·실시간 보호, Gatekeeper·SIP)가 꺼짐(11/12 추가)</li>
  * </ul>
+ * 위협 플래그({@link #threat}, 11/12 추가): THREAT_DETECTED는 Defender 위협 탐지 건수가 앞 진단보다 늘었을 때,
+ * 앞 진단이 없거나 그 건수를 못 읽었으면 이번 건수가 1 이상일 때 붙는다(대여 전부터 있던 기록을 매번 다시 올리지 않게).
  * 못 읽은 값(null)이나 checks가 없는 옛 진단은 플래그를 붙이지 않는다.
  */
 public final class FlagRules {
@@ -40,6 +43,8 @@ public final class FlagRules {
     public static final String ACTIVATION_LOCK_ON = "ACTIVATION_LOCK_ON";
     public static final String DISK_ENCRYPTION_ON = "DISK_ENCRYPTION_ON";
     public static final String DISK_HEALTH_WARNING = "DISK_HEALTH_WARNING";
+    public static final String SECURITY_PROTECTION_OFF = "SECURITY_PROTECTION_OFF";
+    public static final String THREAT_DETECTED = "THREAT_DETECTED";
     public static final String STATES_VERSION = "state-rules-v1";
 
     private FlagRules() {
@@ -73,7 +78,38 @@ public final class FlagRules {
         if ("WARNING".equals(c.osDiskHealth())) {
             drafts.add(state(DISK_HEALTH_WARNING, "osDiskHealth", c.osDiskHealth(), current.os()));
         }
+        if ("OFF".equals(c.securityProtection())) {
+            drafts.add(state(SECURITY_PROTECTION_OFF, "securityProtection", c.securityProtection(), current.os()));
+        }
         return drafts;
+    }
+
+    /** 위협 건수 플래그. 비교했으면 compared=true(기준은 앞 진단), 아니면 기준은 이번 진단 자신. */
+    public record ThreatDraft(Draft draft, boolean compared) {
+    }
+
+    /** base는 같은 렌탈 바로 앞 진단(없으면 null). 이번 건수를 못 읽었으면 플래그 없음. */
+    public static java.util.Optional<ThreatDraft> threat(DiagnosticRun base, DiagnosticRun current) {
+        Integer now = threatCount(current);
+        Integer before = base == null ? null : threatCount(base);
+        if (now == null) {
+            return java.util.Optional.empty();
+        }
+        boolean compared = before != null;
+        if (compared ? now <= before : now < 1) {
+            return java.util.Optional.empty();
+        }
+        Map<String, Object> detail = new LinkedHashMap<>();
+        detail.put("rule", STATES_VERSION);
+        detail.put("field", "threatCount");
+        detail.put("before", before);
+        detail.put("after", now);
+        detail.put("os", current.os());
+        return java.util.Optional.of(new ThreatDraft(new Draft(THREAT_DETECTED, detail), compared));
+    }
+
+    private static Integer threatCount(DiagnosticRun run) {
+        return run.checks() == null ? null : run.checks().threatCount();
     }
 
     private static Draft state(String kind, String field, String value, String os) {
