@@ -14,6 +14,10 @@ public final class DiagnosticResults {
     public record RunCreated(String runId, List<Flag> flags) {
     }
 
+    /** 200 DiagnosticsRedo: 이전 진단으로 돌린 실행(지우지 않음) */
+    public record RunRedone(String checkpointId, String supersededRunId, OffsetDateTime supersededAt) {
+    }
+
     /** InspectionFlag */
     public record Flag(String kind, String baseRunId, Map<String, Object> detail) {
     }
