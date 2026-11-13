@@ -21,6 +21,7 @@ import com.gakdo.trace.diagnostics.common.infra.PublicIds;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CatalogDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CheckpointDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunCreated;
+import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunRedone;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticRunService;
 
 import jakarta.validation.constraints.Pattern;
@@ -60,5 +61,12 @@ public class DiagnosticRunController {
     public CheckpointDiagnostics checkpoint(@AuthenticationPrincipal Jwt jwt,
             @PathVariable @Pattern(regexp = PublicIds.PATTERN) String checkpointId) {
         return service.checkpoint(Caller.from(jwt), checkpointId);
+    }
+
+    /** 진단 다시 하기(11/13, ADMIN): 봉인 전 시점의 지금 진단을 이전 진단으로 돌린다. 지우지 않는다. */
+    @PostMapping(path = "/api/v1/diagnostics/checkpoints/{checkpointId}/redo", produces = MediaType.APPLICATION_JSON_VALUE)
+    public RunRedone redo(@AuthenticationPrincipal Jwt jwt,
+            @PathVariable @Pattern(regexp = PublicIds.PATTERN) String checkpointId) {
+        return service.redo(Caller.from(jwt), checkpointId);
     }
 }

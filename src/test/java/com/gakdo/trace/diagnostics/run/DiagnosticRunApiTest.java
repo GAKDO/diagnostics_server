@@ -52,6 +52,7 @@ import com.gakdo.trace.diagnostics.run.api.DiagnosticRunController;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticRunService;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticsEventPublisher;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticsRecordedEvent;
+import com.gakdo.trace.diagnostics.run.application.SealedCheckpointStore;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticUpload;
 import com.gakdo.trace.diagnostics.run.infra.DiagnosticRunRepository;
@@ -85,6 +86,8 @@ class DiagnosticRunApiTest extends WebTestBase {
     private DiagnosticsEventPublisher events;
     @MockitoBean
     private PlatformTransactionManager txManager;
+    @MockitoBean
+    private SealedCheckpointStore seals;
 
     private final AtomicLong ids = new AtomicLong();
 
@@ -146,7 +149,7 @@ class DiagnosticRunApiTest extends WebTestBase {
         upload(Examples.bytes(Examples.MACOS), agent()).andExpect(status().isCreated());
         ArgumentCaptor<DiagnosticRun> saved = ArgumentCaptor.forClass(DiagnosticRun.class);
         verify(runs).saveAndFlush(saved.capture());
-        when(runs.findByCheckpointIdIn(any())).thenReturn(List.of(saved.getValue()));
+        when(runs.findByCheckpointIdInAndSupersededAtIsNull(any())).thenReturn(List.of(saved.getValue()));
 
         mvc.perform(get("/api/v1/diagnostics/catalog?checkpointIds=" + OUTBOUND + "," + OUTBOUND))
                 .andExpect(status().isOk())
@@ -179,7 +182,7 @@ class DiagnosticRunApiTest extends WebTestBase {
     @DisplayName("같은 렌탈에 앞선 진단이 있으면 이벤트 baseRunId는 바로 앞 실행의 runId")
     void baseRunIdIsPreviousRun() throws Exception {
         DiagnosticRun outbound = stored(OUTBOUND, RENTAL, Examples.MACOS, "outbound-key-01");
-        when(runs.findFirstByRentalIdOrderByIdDesc(RENTAL)).thenReturn(Optional.of(outbound));
+        when(runs.findFirstByRentalIdAndSupersededAtIsNullOrderByIdDesc(RENTAL)).thenReturn(Optional.of(outbound));
         upload(Examples.bytes(Examples.MACOS), agent(RETURN, RENTAL)).andExpect(status().isCreated());
         DiagnosticsRecordedEvent event = publishedEvent();
         assertThat(event.baseRunId()).isEqualTo(outbound.publicId());
@@ -287,7 +290,7 @@ class DiagnosticRunApiTest extends WebTestBase {
     @DisplayName("같은 키·같은 본문으로 다시 보내면 처음 응답(201, 같은 runId)이고 새 행·이벤트가 없다")
     void sameKeySameBodyReplays() throws Exception {
         DiagnosticRun existing = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(existing));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(existing));
         upload(Examples.bytes(Examples.MACOS), agent())
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.runId").value(existing.publicId()))
@@ -299,7 +302,7 @@ class DiagnosticRunApiTest extends WebTestBase {
     @Test
     @DisplayName("같은 키에 다른 본문이면 422 IDEMPOTENCY_KEY_CONFLICT")
     void sameKeyOtherBodyConflicts() throws Exception {
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
         upload(Examples.bytes(Examples.SSD_SKIPPED), agent())
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
@@ -308,7 +311,7 @@ class DiagnosticRunApiTest extends WebTestBase {
     @Test
     @DisplayName("이미 진단이 있는 시점에 다른 키로 올리면 409 DIAGNOSTIC_ALREADY_UPLOADED")
     void secondUploadOnCheckpointConflicts() throws Exception {
-        when(runs.findByCheckpointId(OUTBOUND))
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND))
                 .thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, "first-key-0001")));
         upload(Examples.bytes(Examples.MACOS), agent())
                 .andExpect(status().isConflict())
@@ -334,7 +337,7 @@ class DiagnosticRunApiTest extends WebTestBase {
     @DisplayName("출고 시점 조회: 배터리·SSD·부품·벤치마크 요약, previous는 null, flags는 빈 배열")
     void checkpointSummary() throws Exception {
         DiagnosticRun run = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(run));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.checkpointId").value(OUTBOUND))
@@ -360,8 +363,8 @@ class DiagnosticRunApiTest extends WebTestBase {
     void checkpointWithPrevious() throws Exception {
         DiagnosticRun outbound = stored(OUTBOUND, RENTAL, Examples.SSD_SKIPPED, "outbound-key-01");
         DiagnosticRun returned = stored(RETURN, RENTAL, Examples.WINDOWS, KEY);
-        when(runs.findByCheckpointId(RETURN)).thenReturn(Optional.of(returned));
-        when(runs.findFirstByRentalIdAndIdLessThanOrderByIdDesc(eq(RENTAL), anyLong()))
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(RETURN)).thenReturn(Optional.of(returned));
+        when(runs.findFirstByRentalIdAndIdLessThanAndSupersededAtIsNullOrderByIdDesc(eq(RENTAL), anyLong()))
                 .thenReturn(Optional.of(outbound));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + RETURN).with(customer(RENTAL)))
                 .andExpect(status().isOk())
@@ -385,7 +388,7 @@ class DiagnosticRunApiTest extends WebTestBase {
             b.putNull("osMaxCapacityPercent");
             b.putNull("osCondition");
         }), KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(run));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.current.battery").doesNotExist());
@@ -404,7 +407,7 @@ class DiagnosticRunApiTest extends WebTestBase {
             b.putNull("osMaxCapacityPercent");
             b.putNull("osCondition");
         }), KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(run));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.current.battery.skippedReason").value("NO_PERMISSION"))
@@ -415,7 +418,7 @@ class DiagnosticRunApiTest extends WebTestBase {
     @Test
     @DisplayName("다른 렌탈 고객은 403 OUT_OF_SCOPE, 촬영 JWT는 403 FORBIDDEN, 진단 없는 시점은 404")
     void checkpointScope() throws Exception {
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(customer(OTHER_RENTAL)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("OUT_OF_SCOPE"));
@@ -459,6 +462,67 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .content(Examples.bytes(Examples.MACOS)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    // ---- 진단 다시 하기(11/13)
+
+    private static String redoPath(String checkpointId) {
+        return "/api/v1/diagnostics/checkpoints/" + checkpointId + "/redo";
+    }
+
+    @Test
+    @DisplayName("봉인 전 시점에서 관리자가 진단 다시 하기를 하면 200이고, 지금 진단은 지우지 않고 이전 진단으로 남는다")
+    void adminRedoSupersedesCurrentRun() throws Exception {
+        DiagnosticRun run = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
+        mvc.perform(post(redoPath(OUTBOUND)).with(admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkpointId").value(OUTBOUND))
+                .andExpect(jsonPath("$.supersededRunId").value(run.publicId()))
+                .andExpect(jsonPath("$.supersededAt").isNotEmpty());
+        assertThat(run.supersededAt()).isNotNull();
+        verify(runs).saveAndFlush(run);
+        verify(runs).lockRental(RENTAL);
+        verify(runs, never()).delete(any());
+    }
+
+    @Test
+    @DisplayName("봉인된 시점은 진단 다시 하기가 409 RECORD_ALREADY_SEALED이고 지금 진단은 그대로다")
+    void sealedCheckpointCannotRedo() throws Exception {
+        DiagnosticRun run = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
+        when(seals.isSealed(OUTBOUND)).thenReturn(true);
+        mvc.perform(post(redoPath(OUTBOUND)).with(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RECORD_ALREADY_SEALED"));
+        assertThat(run.supersededAt()).isNull();
+        verify(runs, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("지금 진단이 없는 시점의 진단 다시 하기는 404")
+    void redoWithoutRunIsNotFound() throws Exception {
+        mvc.perform(post(redoPath(OUTBOUND)).with(admin()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("진단 다시 하기는 관리자만: 고객·에이전트 토큰은 403")
+    void redoIsAdminOnly() throws Exception {
+        mvc.perform(post(redoPath(OUTBOUND)).with(customer(RENTAL)))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(redoPath(OUTBOUND)).with(agent()))
+                .andExpect(status().isForbidden());
+        verify(runs, never()).saveAndFlush(any());
+    }
+
+    @Test
+    @DisplayName("진단 다시 하기 뒤에는 같은 시점에 새 진단을 올릴 수 있다(지금 진단이 없으므로 201)")
+    void uploadAfterRedoIsStored() throws Exception {
+        // 다시 하기로 지금 진단이 비면 조회는 빈 값이다(Mockito 기본). 새 키로 올리면 저장된다
+        upload(Examples.bytes(Examples.MACOS), agent()).andExpect(status().isCreated());
+        verify(runs).saveAndFlush(any(DiagnosticRun.class));
     }
 
     // ---- 도우미

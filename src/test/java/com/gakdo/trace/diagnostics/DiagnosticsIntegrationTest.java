@@ -57,7 +57,8 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
     @BeforeEach
     void clean() {
         jdbc.execute("TRUNCATE diagnostics.inspection_flag, diagnostics.benchmark_result, diagnostics.ssd_health, "
-                + "diagnostics.battery_reading, diagnostics.hardware_component, diagnostics.diagnostic_run CASCADE");
+                + "diagnostics.battery_reading, diagnostics.hardware_component, diagnostics.diagnostic_run, "
+                + "diagnostics.sealed_checkpoint CASCADE");
     }
 
     private ResultActions upload(byte[] body, RequestPostProcessor token, String key) throws Exception {
@@ -109,6 +110,38 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
     }
 
     @Test
+    @DisplayName("진단 다시 하기 뒤 새 키로 올리면 새 진단이 그 시점의 결과가 되고, 이전 진단은 행으로 남는다")
+    void redoKeepsHistoryOnRealDatabase() throws Exception {
+        byte[] body = Examples.bytes(Examples.MACOS);
+        String first = runId(upload(body, agent(), "key-00000001").andExpect(status().isCreated()));
+        mvc.perform(post("/api/v1/diagnostics/checkpoints/" + OUTBOUND + "/redo").with(admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.supersededRunId").value(first));
+        mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin())).andExpect(status().isNotFound());
+        String second = runId(upload(body, agent(), "key-00000002").andExpect(status().isCreated()));
+        assertThat(second).isNotEqualTo(first);
+        mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.current.runId").value(second))
+                .andExpect(jsonPath("$.previous").value(org.hamcrest.Matchers.nullValue()));
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM diagnostics.diagnostic_run WHERE checkpoint_id = ?",
+                Integer.class, OUTBOUND)).isEqualTo(2);
+        verify(events, times(2)).publishRecorded(any());
+    }
+
+    @Test
+    @DisplayName("봉인된 시점은 진단 다시 하기가 409이고 지금 진단은 그대로다")
+    void sealedBlocksRedoOnRealDatabase() throws Exception {
+        String first = runId(upload(Examples.bytes(Examples.MACOS), agent(), "key-00000001").andExpect(status().isCreated()));
+        jdbc.update("INSERT INTO diagnostics.sealed_checkpoint(checkpoint_id, sealed_at) VALUES (?, now())", OUTBOUND);
+        mvc.perform(post("/api/v1/diagnostics/checkpoints/" + OUTBOUND + "/redo").with(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RECORD_ALREADY_SEALED"));
+        mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
+                .andExpect(jsonPath("$.current.runId").value(first));
+    }
+
+    @Test
     @DisplayName("출고·반납 두 시점을 올리면 반납 조회 한 번으로 두 시점의 배터리·SSD와 용량 하락 플래그를 받는다")
     void twoCheckpointsInOneQuery() throws Exception {
         String outbound = runId(upload(Examples.bytes(Examples.MACOS), agent(OUTBOUND, RENTAL), "key-00000001")
@@ -134,7 +167,7 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
                 .andExpect(jsonPath("$.flags[0].baseRunId").value(outbound));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.previous").doesNotExist());
+                .andExpect(jsonPath("$.previous").value(org.hamcrest.Matchers.nullValue()));
     }
 
     @Test

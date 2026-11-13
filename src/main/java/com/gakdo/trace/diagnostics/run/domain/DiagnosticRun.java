@@ -20,7 +20,8 @@ import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 
 /**
- * 진단 실행 하나(diagnostics.diagnostic_run). 시점당 하나이고 고치지 않는다(헌법 III: 덧붙이기만).
+ * 진단 실행 하나(diagnostics.diagnostic_run). 시점당 지금 진단은 하나이고 내용은 고치지 않는다(헌법 III: 덧붙이기만).
+ * 봉인 전 관리자가 "진단 다시 하기"를 하면 지우지 않고 superseded_at만 찍어 이전 진단(이력)으로 돌린다(11/13).
  * 부품·배터리·SSD·벤치마크는 같은 트랜잭션에 함께 저장된다.
  */
 @Entity
@@ -85,6 +86,10 @@ public class DiagnosticRun {
 
     @Column(name = "updated_at", nullable = false)
     private OffsetDateTime updatedAt;
+
+    /** 진단 다시 하기로 이전 진단이 된 시각. 지금 진단이면 null */
+    @Column(name = "superseded_at")
+    private OffsetDateTime supersededAt;
 
     @OneToMany(mappedBy = "run", cascade = CascadeType.PERSIST)
     @OrderBy("id")
@@ -196,5 +201,18 @@ public class DiagnosticRun {
 
     public DiagnosticUpload.Checks checks() {
         return checks;
+    }
+
+    public OffsetDateTime supersededAt() {
+        return supersededAt;
+    }
+
+    /** 진단 다시 하기: 이 실행을 이전 진단으로 돌린다. 이미 돌린 실행은 다시 돌리지 않는다. */
+    public void supersede(OffsetDateTime at) {
+        if (supersededAt != null) {
+            throw new IllegalStateException("이미 이전 진단입니다: " + publicId);
+        }
+        supersededAt = at;
+        updatedAt = at;
     }
 }
