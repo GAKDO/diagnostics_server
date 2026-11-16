@@ -1,6 +1,6 @@
 # diagnostics-server
 
-TRACE(노트북 렌탈 상태 기록 서비스)의 **diagnostics-server**: 진단 검증·전후 비교·점검 플래그·추이 기록
+TRACE(노트북 렌탈 상태 기록 서비스)의 **diagnostics-server**: 진단 검증·전후 비교·점검 플래그(추이 그래프는 web이 저장된 진단을 모아 그림, InfluxDB는 쓰지 않음)
 
 - 담당: A
 - 설계: [GAKDO/docs](https://github.com/GAKDO/docs) — 요구사항·아키텍처·ERD·REST API v0
@@ -25,6 +25,8 @@ curl http://localhost:8080/api/v1/diagnostics/ping
 | `POST /api/v1/diagnostics/runs` | AGENT(페어링) | `diag.v1` 진단 JSON을 검증(422)해 토큰의 시점에 저장, 원본 SHA-256, `trace.diagnostics.recorded` 발행. 시점당 하나(409), `Idempotency-Key` 재생 |
 | `GET /api/v1/diagnostics/checkpoints/{checkpointId}` | ADMIN, CUSTOMER(본인 렌탈) | 리포트용 시점 진단 요약(배터리·SSD·부품·벤치마크) + 같은 렌탈 직전 시점 + 점검 플래그 |
 
+점검 플래그(`flag-rules-v1`): 같은 렌탈 바로 앞 진단과 비교해 `COMPONENT_CHANGED`(부품 바뀜)·`CAPACITY_DROP`(배터리 최대 용량 급감)·`BENCH_DROP`(벤치마크 급감), 이번 진단의 `checks`만 보고 `ACTIVATION_LOCK_ON`·`DISK_ENCRYPTION_ON`·`DISK_HEALTH_WARNING`·`SECURITY_PROTECTION_OFF`(Defender·Gatekeeper·SIP 꺼짐, 11/12), 위협 건수가 늘면 `THREAT_DETECTED`(11/12)를 붙입니다. 못 읽은 값(null)에는 붙이지 않습니다.
+
 진단 JSON Schema는 contracts 사본(`src/main/resources/contracts`)으로 검증합니다. contracts가 바뀌면 `scripts/sync-contracts.sh ../contracts`로 맞추고 `--check`로 확인합니다.
 
 환경 변수: `POSTGRES_HOST`·`POSTGRES_PORT`·`POSTGRES_DB`, `DB_USERNAME`·`DB_PASSWORD`, `RABBITMQ_HOST`·`RABBITMQ_PORT`·`RABBITMQ_VHOST`·`RABBITMQ_USERNAME`·`RABBITMQ_PASSWORD`, `AUTH_JWKS_URI`(또는 `AUTH_SERVER_URL`).
@@ -44,7 +46,7 @@ Docker가 있으면 Testcontainers(PostgreSQL·RabbitMQ)로 통합 테스트를 
 | 워크플로 | 언제 | 하는 일 |
 |---|---|---|
 | `backend-ci` | PR, develop push | 테스트 + JaCoCo 40% + (켜져 있으면) 학교 SonarQube |
-| `배포` | PR(빌드만), develop·main push | 이미지 → GHCR(`ghcr.io/<조직>/diagnostics-server`). main이면 gitops 레포 이미지 태그 갱신 → Argo CD 배포 |
+| `배포` | PR(빌드만), develop·main push(`.md`만 바뀌면 건너뜀) | 이미지 → GHCR(`ghcr.io/<조직>/diagnostics-server`, develop은 `:develop`). 지금 운영(https://gakdo.site, 학교 서버 Compose)은 gitops `compose/ops/autodeploy.sh`가 3분마다 `:develop`을 받아 이 서비스만 무중단으로 바꾼다. main이면 gitops `overlays/school` 이미지 태그도 바꾼다(클러스터 경로, 지금은 쓰지 않음) |
 | `비밀값 검사` | PR, main·develop push | 학교 공용 비밀번호 패턴 + gitleaks |
 | `release` | main에 CHANGELOG 버전 | 태그와 GitHub Release |
 | `PR 알림`·`CI 결과 알림` | PR·CI 끝 | Discord·텔레그램 (변수로 켬) |
