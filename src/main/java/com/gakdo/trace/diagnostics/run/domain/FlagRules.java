@@ -37,6 +37,10 @@ public final class FlagRules {
     public static final double CAPACITY_DROP_PCT = 5.0;
     public static final double BENCH_DROP_PCT = 15.0;
 
+    /** 플래그 detail의 이전·이후 값 키 */
+    private static final String BEFORE = "before";
+    private static final String AFTER = "after";
+
     public static final String COMPONENT_CHANGED = "COMPONENT_CHANGED";
     public static final String CAPACITY_DROP = "CAPACITY_DROP";
     public static final String BENCH_DROP = "BENCH_DROP";
@@ -102,8 +106,8 @@ public final class FlagRules {
         Map<String, Object> detail = new LinkedHashMap<>();
         detail.put("rule", STATES_VERSION);
         detail.put("field", "threatCount");
-        detail.put("before", before);
-        detail.put("after", now);
+        detail.put(BEFORE, before);
+        detail.put(AFTER, now);
         detail.put("os", current.os());
         return java.util.Optional.of(new ThreatDraft(new Draft(THREAT_DETECTED, detail), compared));
     }
@@ -137,8 +141,8 @@ public final class FlagRules {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("rule", VERSION);
             detail.put("componentKind", kind);
-            detail.put("before", List.copyOf(was));
-            detail.put("after", List.copyOf(now));
+            detail.put(BEFORE, List.copyOf(was));
+            detail.put(AFTER, List.copyOf(now));
             drafts.add(new Draft(COMPONENT_CHANGED, detail));
         }
         return drafts;
@@ -188,8 +192,8 @@ public final class FlagRules {
             Map<String, Object> detail = new LinkedHashMap<>();
             detail.put("rule", VERSION);
             detail.put("metric", now.metric());
-            detail.put("before", was.median());
-            detail.put("after", now.median());
+            detail.put(BEFORE, was.median());
+            detail.put(AFTER, now.median());
             detail.put("dropPct", BigDecimal.valueOf(dropPct).setScale(2, RoundingMode.HALF_UP).doubleValue());
             detail.put("thresholdPct", BENCH_DROP_PCT);
             drafts.add(new Draft(BENCH_DROP, detail));
