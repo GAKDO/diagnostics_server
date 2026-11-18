@@ -47,6 +47,8 @@ import com.gakdo.trace.diagnostics.run.domain.InspectionFlag;
 public class DiagnosticRunService {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosticRunService.class);
+    /** 404 안내에 쓰는 대상 이름 */
+    private static final String CHECKPOINT_RUN = "이 시점의 진단";
 
     private final DiagnosticRunRepository runs;
     private final InspectionFlagRepository flags;
@@ -102,7 +104,7 @@ public class DiagnosticRunService {
     @Transactional(readOnly = true)
     public CheckpointDiagnostics checkpoint(Caller caller, String checkpointId) {
         DiagnosticRun run = runs.findByCheckpointIdAndSupersededAtIsNull(checkpointId)
-                .orElseThrow(() -> DomainException.notFound("이 시점의 진단"));
+                .orElseThrow(() -> DomainException.notFound(CHECKPOINT_RUN));
         caller.requireCanRead(run.rentalId());
         Optional<DiagnosticRun> previous = runs.findFirstByRentalIdAndIdLessThanAndSupersededAtIsNullOrderByIdDesc(run.rentalId(), run.id());
         return new CheckpointDiagnostics(checkpointId, RunSummaries.of(run),
@@ -120,11 +122,11 @@ public class DiagnosticRunService {
             throw new DomainException(ErrorCode.FORBIDDEN, "관리자만 진단을 다시 할 수 있습니다.");
         }
         DiagnosticRun found = runs.findByCheckpointIdAndSupersededAtIsNull(checkpointId)
-                .orElseThrow(() -> DomainException.notFound("이 시점의 진단"));
+                .orElseThrow(() -> DomainException.notFound(CHECKPOINT_RUN));
         // 같은 렌탈 업로드와 직렬화한 뒤 다시 읽는다(동시에 올라온 업로드·다시 하기가 섞이지 않게)
         runs.lockRental(found.rentalId());
         DiagnosticRun current = runs.findByCheckpointIdAndSupersededAtIsNull(checkpointId)
-                .orElseThrow(() -> DomainException.notFound("이 시점의 진단"));
+                .orElseThrow(() -> DomainException.notFound(CHECKPOINT_RUN));
         if (seals.isSealed(checkpointId)) {
             throw new DomainException(ErrorCode.RECORD_ALREADY_SEALED, "봉인된 시점의 진단은 다시 할 수 없습니다.");
         }

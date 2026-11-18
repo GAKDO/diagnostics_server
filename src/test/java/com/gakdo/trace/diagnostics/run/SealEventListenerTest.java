@@ -54,9 +54,11 @@ class SealEventListenerTest {
     @Test
     @DisplayName("JSON이 아니거나 checkpointId가 NanoID가 아니면 기록하지 않고 DLX로 보낸다")
     void malformedGoesToDlx() {
-        assertThatThrownBy(() -> listener.handle("not json".getBytes(StandardCharsets.UTF_8)))
+        byte[] notJson = "not json".getBytes(StandardCharsets.UTF_8);
+        byte[] badId = sealed("bad", null);
+        assertThatThrownBy(() -> listener.handle(notJson))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
-        assertThatThrownBy(() -> listener.handle(sealed("bad", null)))
+        assertThatThrownBy(() -> listener.handle(badId))
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
         verify(store, never()).markSealed(anyString(), any());
     }

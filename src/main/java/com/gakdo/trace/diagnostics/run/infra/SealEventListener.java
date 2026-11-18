@@ -46,8 +46,9 @@ public class SealEventListener {
         } catch (IOException e) {
             throw new AmqpRejectAndDontRequeueException("봉인 이벤트 JSON을 읽을 수 없어 DLX로 보냅니다", e);
         }
+        // readTree는 빈 본문이면 null을 돌려준다. 아래에서 event를 다시 읽으므로 여기서 함께 막는다
         String checkpointId = event == null ? "" : event.path("checkpointId").asText("");
-        if (!PublicIds.isValid(checkpointId)) {
+        if (event == null || !PublicIds.isValid(checkpointId)) {
             throw new AmqpRejectAndDontRequeueException("봉인 이벤트의 checkpointId 형식이 맞지 않아 DLX로 보냅니다");
         }
         OffsetDateTime sealedAt = time(event, "signedAt");
