@@ -25,9 +25,7 @@ public class InspectionFlag {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "checkpoint_id", nullable = false, length = 21)
-    private String checkpointId;
-
+    /** 시점은 따로 두지 않는다. 진단 실행이 시점을 정하므로(run.checkpoint_id) 두 번 적으면 어긋날 수 있다(V6). */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "run_id", nullable = false)
     private DiagnosticRun run;
@@ -54,7 +52,6 @@ public class InspectionFlag {
 
     public InspectionFlag(DiagnosticRun run, DiagnosticRun baseRun, String kind, Map<String, Object> detail,
             OffsetDateTime now) {
-        this.checkpointId = run.checkpointId();
         this.run = run;
         this.baseRun = baseRun;
         this.kind = kind;

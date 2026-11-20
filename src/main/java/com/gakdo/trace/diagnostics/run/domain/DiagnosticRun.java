@@ -59,9 +59,6 @@ public class DiagnosticRun {
     @Column(name = "checks")
     private DiagnosticUpload.Checks checks;
 
-    @Column(name = "raw_object_key", length = 512)
-    private String rawObjectKey;
-
     @Column(name = "raw_body", nullable = false, columnDefinition = "text")
     private String rawBody;
 
