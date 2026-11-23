@@ -106,6 +106,7 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
 
     // [상황] 같은 요청 키로 두 번 보내고(네트워크 재시도), 다른 키로 같은 시점에 또 보낸다.
     // [기대] 재시도는 같은 runId를 돌려주고, 다른 키는 409(이미 올림). DB에는 진단 한 건, 이벤트도 한 번뿐.
+    //        ※ 응답 코드: 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
     @Test
     @DisplayName("같은 키로 다시 보내면 같은 runId, 다른 키로 같은 시점이면 409, 행은 하나")
     void replayAndConflictOnRealDatabase() throws Exception {
@@ -122,6 +123,7 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
     // [상황] 출고 진단을 올린 뒤 관리자가 "진단 다시 하기"를 하고, 새 키로 다시 올린다.
     // [기대] 다시 하기 직후 조회는 404(지금 진단 없음). 새로 올린 진단이 그 시점의 결과가 되고,
     //        이전 진단은 지우지 않고 행으로 남는다(DB에 2건, 이벤트 2번).
+    //        ※ 응답 코드: 404 = 찾을 수 없음(없는 주소나 데이터)
     @Test
     @DisplayName("진단 다시 하기 뒤 새 키로 올리면 새 진단이 그 시점의 결과가 되고, 이전 진단은 행으로 남는다")
     void redoKeepsHistoryOnRealDatabase() throws Exception {
@@ -144,6 +146,7 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
 
     // [상황] 출고 진단이 봉인된 상태에서 관리자가 "진단 다시 하기"를 누른다.
     // [기대] 409 RECORD_ALREADY_SEALED. 봉인된 기록은 바꿀 수 없으므로 지금 진단이 그대로다.
+    //        ※ 응답 코드: 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
     @Test
     @DisplayName("봉인된 시점은 진단 다시 하기가 409이고 지금 진단은 그대로다")
     void sealedBlocksRedoOnRealDatabase() throws Exception {
@@ -190,6 +193,7 @@ class DiagnosticsIntegrationTest extends PostgresTestBase {
 
     // [상황] 출고는 맥으로 진단했는데, 반납 때는 다른 기기(윈도우 노트북)를 진단해 올린다.
     // [기대] 422 DEVICE_SERIAL_MISMATCH(빌린 기기가 아님)로 거부되고 저장되지 않는다.
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("반납 시점에 등록 시리얼과 다른 기기를 진단하면 422 DEVICE_SERIAL_MISMATCH")
     void serialMismatchOnRealDatabase() throws Exception {

@@ -64,6 +64,7 @@ class DiagnosticsEventIntegrationTest {
     // [상황] 에이전트 토큰으로 맥 진단 결과를 올리고, 테스트용 큐에서 나간 이벤트를 받는다.
     // [기대] 업로드는 201. 이벤트가 약속한 형식에 맞고, 메시지 ID는 이벤트 ID와 같으며,
     //        응답의 runId·렌탈·출고 시점이 이벤트와 일치한다. 첫 진단이라 비교 기준(baseRunId)은 비어 있다.
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("업로드하면 trace.events에 trace.diagnostics.recorded가 계약 형식으로 나가고 message_id는 eventId다")
     void recordedEventIsPublished() throws Exception {

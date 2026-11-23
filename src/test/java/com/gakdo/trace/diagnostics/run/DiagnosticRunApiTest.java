@@ -112,6 +112,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] AGENT 토큰으로 올바른 맥 진단 결과를 올린다.
     // [기대] 201, 새 진단 ID(21자 NanoID)와 빈 플래그 목록이 온다.
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("AGENT 토큰과 유효한 진단 JSON을 올리면 201, runId(NanoID)와 빈 flags")
     void uploadValidRun() throws Exception {
@@ -158,6 +159,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 로그인 없이 공개 진단 요약을 조회하고, 잘못된 ID로도 조회한다.
     // [기대] 배터리·벤치마크만 보이고 부품·잠금 상태·시리얼 같은 민감한 값은 빠진다. 잘못된 ID는 400.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("공개 진단 요약은 로그인 없이 배터리·벤치마크를 주고, 부품·잠금·시리얼은 싣지 않으며 잘못된 ID는 400")
     void publicCatalogHidesComponents() throws Exception {
@@ -210,6 +212,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 약속한 형식에 맞지 않는 진단 결과를 올린다.
     // [기대] 422 DIAGNOSTIC_SCHEMA_INVALID, 저장도 이벤트도 없다.
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("스키마에 맞지 않는 결과는 422 DIAGNOSTIC_SCHEMA_INVALID로 거부되고 저장·이벤트가 없다")
     void schemaInvalidIsRejected() throws Exception {
@@ -236,6 +239,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 형식은 맞지만 벤치마크 중앙값이 측정값들의 가운데 값이 아니다.
     // [기대] 422 DIAGNOSTIC_SCHEMA_INVALID(서버 업무 규칙 위반).
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("스키마는 통과해도 median이 가운데 값이 아니면 422 DIAGNOSTIC_SCHEMA_INVALID")
     void serverRuleViolationIsRejected() throws Exception {
@@ -249,6 +253,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 본문이 JSON이 아니다.
     // [기대] 400 VALIDATION_FAILED.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("본문이 JSON이 아니면 400 VALIDATION_FAILED")
     void notJsonIsBadRequest() throws Exception {
@@ -259,6 +264,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] SSD 검사를 권한이 없어 건너뛴 진단을 올린다.
     // [기대] 201. SSD 값은 비어 있고(null) 건너뛴 사유가 그대로 저장된다("못 읽은 값은 None + 사유" 원칙).
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("SSD를 권한이 없어 건너뛰면 201이고 값은 null, 사유는 그대로 저장된다")
     void skippedStorageIsStoredWithReason() throws Exception {
@@ -289,6 +295,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 진단한 기기의 시리얼이 AGENT 토큰에 적힌 렌탈 기기 시리얼과 다르다(다른 노트북을 진단).
     // [기대] 422 DEVICE_SERIAL_MISMATCH, 저장·이벤트 없음.
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("진단한 기기 시리얼이 AGENT 토큰의 등록 시리얼과 다르면 422 DEVICE_SERIAL_MISMATCH, 저장·이벤트 없음")
     void serialMismatchIsRejected() throws Exception {
@@ -312,6 +319,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 기기 시리얼이 들어 있지 않은 예전 방식의 AGENT 토큰으로 올린다.
     // [기대] 403 FORBIDDEN(어느 기기인지 확인할 수 없으므로 받지 않음).
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("deviceSerial 클레임이 없는 AGENT 토큰(예전 페어링 코드)은 403 FORBIDDEN")
     void agentWithoutSerialIsForbidden() throws Exception {
@@ -325,6 +333,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 네트워크가 끊겨 에이전트가 같은 요청 키·같은 본문으로 다시 보낸다.
     // [기대] 처음과 같은 응답(201, 같은 runId)을 돌려주고 새 진단·이벤트를 만들지 않는다.
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("같은 키·같은 본문으로 다시 보내면 처음 응답(201, 같은 runId)이고 새 행·이벤트가 없다")
     void sameKeySameBodyReplays() throws Exception {
@@ -340,6 +349,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 같은 요청 키로 내용이 다른 진단을 보낸다.
     // [기대] 422 IDEMPOTENCY_KEY_CONFLICT(키 재사용 오류).
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("같은 키에 다른 본문이면 422 IDEMPOTENCY_KEY_CONFLICT")
     void sameKeyOtherBodyConflicts() throws Exception {
@@ -351,6 +361,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 이미 진단이 있는 시점에 다른 키로 또 올린다.
     // [기대] 409 DIAGNOSTIC_ALREADY_UPLOADED. 한 시점에는 진단 하나만(바꾸려면 관리자의 "진단 다시 하기").
+    //        ※ 응답 코드: 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
     @Test
     @DisplayName("이미 진단이 있는 시점에 다른 키로 올리면 409 DIAGNOSTIC_ALREADY_UPLOADED")
     void secondUploadOnCheckpointConflicts() throws Exception {
@@ -363,6 +374,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 요청 키(Idempotency-Key)가 없거나 8자보다 짧다.
     // [기대] 400 VALIDATION_FAILED.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("Idempotency-Key가 없거나 8자 미만이면 400 VALIDATION_FAILED")
     void idempotencyKeyRequired() throws Exception {
@@ -470,6 +482,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 다른 렌탈의 고객, QR 촬영 전용 토큰, 진단이 없는 시점으로 조회한다.
     // [기대] 다른 렌탈 고객은 403 OUT_OF_SCOPE, 촬영 토큰은 403 FORBIDDEN, 진단 없는 시점은 404.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일), 404 = 찾을 수 없음(없는 주소나 데이터)
     @Test
     @DisplayName("다른 렌탈 고객은 403 OUT_OF_SCOPE, 촬영 JWT는 403 FORBIDDEN, 진단 없는 시점은 404")
     void checkpointScope() throws Exception {
@@ -491,6 +504,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 관리자·고객·부스 토큰으로 진단을 올리고, 에이전트 토큰으로 조회해 본다.
     // [기대] 모두 403. 진단을 올리는 건 에이전트만, 조회는 에이전트가 못 한다.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("ADMIN·CUSTOMER·BOOTH 토큰으로 업로드하면 403, AGENT로 조회하면 403")
     void rolesAreChecked() throws Exception {
@@ -504,6 +518,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] AGENT 토큰 안의 시점 ID나 렌탈 ID가 올바른 21자 NanoID 형식이 아니다.
     // [기대] 403 FORBIDDEN.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("AGENT 토큰의 scope나 rentalId가 NanoID가 아니면 403 FORBIDDEN")
     void agentClaimsMustBePublicIds() throws Exception {
@@ -516,6 +531,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 토큰 없이 부른다.
     // [기대] 401 UNAUTHENTICATED.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("토큰이 없으면 401 UNAUTHENTICATED")
     void unauthenticated() throws Exception {
@@ -533,6 +549,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 봉인 전 출고 시점에서 관리자가 "진단 다시 하기"를 누른다(예: 충전기 없이 잘못 잰 경우).
     // [기대] 200. 지금 진단을 지우지 않고 "이전 진단"으로 넘겨 기록을 남긴다.
+    //        ※ 응답 코드: 200 = 정상 처리됨
     @Test
     @DisplayName("봉인 전 시점에서 관리자가 진단 다시 하기를 하면 200이고, 지금 진단은 지우지 않고 이전 진단으로 남는다")
     void adminRedoSupersedesCurrentRun() throws Exception {
@@ -551,6 +568,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 이미 봉인된 시점에서 "진단 다시 하기"를 누른다.
     // [기대] 409 RECORD_ALREADY_SEALED, 지금 진단은 그대로다.
+    //        ※ 응답 코드: 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
     @Test
     @DisplayName("봉인된 시점은 진단 다시 하기가 409 RECORD_ALREADY_SEALED이고 지금 진단은 그대로다")
     void sealedCheckpointCannotRedo() throws Exception {
@@ -566,6 +584,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 진단이 아직 없는 시점에서 "진단 다시 하기"를 누른다.
     // [기대] 404.
+    //        ※ 응답 코드: 404 = 찾을 수 없음(없는 주소나 데이터)
     @Test
     @DisplayName("지금 진단이 없는 시점의 진단 다시 하기는 404")
     void redoWithoutRunIsNotFound() throws Exception {
@@ -576,6 +595,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] 고객 토큰과 에이전트 토큰으로 "진단 다시 하기"를 부른다.
     // [기대] 둘 다 403. 관리자만 할 수 있다.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("진단 다시 하기는 관리자만: 고객·에이전트 토큰은 403")
     void redoIsAdminOnly() throws Exception {
@@ -588,6 +608,7 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // [상황] "진단 다시 하기"로 지금 진단이 비워진 시점에 새 진단을 올린다.
     // [기대] 201로 저장된다.
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("진단 다시 하기 뒤에는 같은 시점에 새 진단을 올릴 수 있다(지금 진단이 없으므로 201)")
     void uploadAfterRedoIsStored() throws Exception {

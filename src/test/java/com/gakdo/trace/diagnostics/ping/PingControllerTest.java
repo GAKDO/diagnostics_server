@@ -22,6 +22,7 @@ class PingControllerTest extends WebTestBase {
 
     // [상황] 로그인 없이 /api/v1/diagnostics/ping 을 부른다.
     // [기대] 200과 함께 서비스 이름(diagnostics-server), 버전, 상태 ok, 배포된 커밋 값이 온다.
+    //        ※ 응답 코드: 200 = 정상 처리됨
     @Test
     @DisplayName("/api/v1/diagnostics/ping은 토큰 없이 200, 계약 PingResponse(service·version·commit)")
     void ping() throws Exception {
