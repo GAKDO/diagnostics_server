@@ -1,3 +1,6 @@
+// 테스트 도구(테스트 자체는 아님): 진짜 PostgreSQL 데이터베이스가 필요한 통합 테스트의 바탕.
+// GitHub Actions에서는 Docker로 DB를 띄우고, Docker가 없는 곳에서는 로컬 테스트 DB에 붙거나 테스트를 건너뛴다.
+
 package com.gakdo.trace.diagnostics.support;
 
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;

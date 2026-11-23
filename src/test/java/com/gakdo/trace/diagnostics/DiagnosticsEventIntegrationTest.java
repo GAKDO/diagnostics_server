@@ -1,3 +1,6 @@
+// 이 파일이 확인하는 것: 진단을 올리면 메시지 큐(RabbitMQ)로 "진단이 기록됨" 이벤트가 실제로 나가는지,
+// 진짜 DB와 진짜 메시지 큐를 띄워 끝까지 확인한다. Docker가 없는 곳에서는 건너뛰고 GitHub Actions에서 돈다.
+
 package com.gakdo.trace.diagnostics;
 
 import static com.gakdo.trace.diagnostics.support.TestJwts.OUTBOUND;
@@ -58,6 +61,9 @@ class DiagnosticsEventIntegrationTest {
     @Autowired
     private ObjectMapper objectMapper;
 
+    // [상황] 에이전트 토큰으로 맥 진단 결과를 올리고, 테스트용 큐에서 나간 이벤트를 받는다.
+    // [기대] 업로드는 201. 이벤트가 약속한 형식에 맞고, 메시지 ID는 이벤트 ID와 같으며,
+    //        응답의 runId·렌탈·출고 시점이 이벤트와 일치한다. 첫 진단이라 비교 기준(baseRunId)은 비어 있다.
     @Test
     @DisplayName("업로드하면 trace.events에 trace.diagnostics.recorded가 계약 형식으로 나가고 message_id는 eventId다")
     void recordedEventIsPublished() throws Exception {

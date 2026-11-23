@@ -1,3 +1,6 @@
+// 이 파일이 확인하는 것: 시험용 렌탈(기기 일련번호가 TEST-로 시작)을 지울 때 진단 기록도 함께 지우는 저장소.
+// 실수로 실제 고객 기기의 진단을 지우지 않도록, 이벤트에 적힌 시리얼만 믿지 않고 DB에 저장된 시리얼로 다시 확인한다.
+
 package com.gakdo.trace.diagnostics.purge;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +25,8 @@ class JdbcRunPurgeStoreTest {
     private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
     private final JdbcRunPurgeStore store = new JdbcRunPurgeStore(jdbc);
 
+    // [상황] 지우라는 시점의 진단 중에 실제 기기 시리얼(TEST-가 아닌 것)이 있다.
+    // [기대] 아무것도 지우지 않는다.
     @Test
     @DisplayName("저장된 진단이 실제 기기 시리얼이면 아무것도 지우지 않는다")
     void realDeviceIsKept() {
@@ -30,6 +35,8 @@ class JdbcRunPurgeStoreTest {
         verify(jdbc, never()).update(anyString(), any(Object[].class));
     }
 
+    // [상황] 그 시점의 진단이 모두 TEST- 시리얼이다.
+    // [기대] 지운다(지운 건수 1).
     @Test
     @DisplayName("저장된 진단이 모두 TEST- 시리얼이면 지운다")
     void testDeviceIsPurged() {
@@ -39,6 +46,8 @@ class JdbcRunPurgeStoreTest {
         assertThat(store.deleteCheckpoint(CP)).isEqualTo(1);
     }
 
+    // [상황] 확인한 직후 실제 기기 진단이 끼어드는 경우를 대비한다.
+    // [기대] 실제로 지우는 SQL 문장마다 "TEST-로 시작하는 시리얼만" 조건이 붙어 있다(이중 안전장치).
     @Test
     @DisplayName("검사 뒤 실제 기기 진단이 끼어들어도 지우는 문장마다 TEST- 시리얼만 고른다")
     void everyDeleteFiltersTestSerial() {

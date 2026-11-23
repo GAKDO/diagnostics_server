@@ -1,3 +1,5 @@
+// 이 파일이 확인하는 것: 서버가 살아 있는지 확인하는 주소(ping). 배포 뒤 상태 확인용.
+
 package com.gakdo.trace.diagnostics.ping;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -18,6 +20,8 @@ class PingControllerTest extends WebTestBase {
     @Autowired
     private MockMvc mockMvc;
 
+    // [상황] 로그인 없이 /api/v1/diagnostics/ping 을 부른다.
+    // [기대] 200과 함께 서비스 이름(diagnostics-server), 버전, 상태 ok, 배포된 커밋 값이 온다.
     @Test
     @DisplayName("/api/v1/diagnostics/ping은 토큰 없이 200, 계약 PingResponse(service·version·commit)")
     void ping() throws Exception {

@@ -1,3 +1,6 @@
+// 테스트 도구(테스트 자체는 아님): 화면 요청(API) 시험이 실제 운영과 같은 보안 규칙(누가 무엇을 부를 수 있나)과
+// 같은 오류 응답 형식(code·title·detail)을 쓰도록 묶어 주는 바탕 클래스.
+
 package com.gakdo.trace.diagnostics.support;
 
 import org.springframework.context.annotation.Import;

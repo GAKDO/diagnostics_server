@@ -1,3 +1,9 @@
+// 테스트 도구(테스트 자체는 아님): 로그인 토큰(JWT)을 가짜로 만들어 준다. 실제 서비스의 역할을 흉내 낸다.
+//   - AGENT: 고객 노트북의 진단 에이전트가 6자리 페어링 코드로 받은 토큰(어느 렌탈·어느 시점·어느 기기 시리얼인지 담김)
+//   - ADMIN: 관리자, CUSTOMER: 고객(자기 렌탈 목록을 담음), BOOTH: 촬영 부스
+//   - capture(): QR로 받은 촬영 전용 토큰(진단 조회에는 쓸 수 없어야 함)
+// RENTAL·OUTBOUND(출고 시점)·RETURN(반납 시점) 같은 상수는 테스트용 ID다.
+
 package com.gakdo.trace.diagnostics.support;
 
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
