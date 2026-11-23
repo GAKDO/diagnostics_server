@@ -1,3 +1,6 @@
+// 테스트 도구(테스트 자체는 아님): contracts 레포에 있는 진단 결과 예시 파일(맥·윈도우·SSD 생략)을 읽어 오고,
+// 필요하면 일부 값만 바꾼 변형(예: 시리얼만 다른 기기)을 만들어 준다. 테스트마다 같은 실제 형태의 데이터를 쓰기 위함.
+
 package com.gakdo.trace.diagnostics.support;
 
 import java.io.IOException;
