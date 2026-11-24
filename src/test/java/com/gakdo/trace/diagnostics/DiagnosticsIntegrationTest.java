@@ -45,6 +45,10 @@ import com.gakdo.trace.diagnostics.support.PostgresTestBase;
 /**
  * 실제 PostgreSQL에 Flyway V1·V2를 올리고(엔티티와 표가 맞는지 validate) 업로드 → 저장 → 조회를 끝까지 확인한다.
  * 이벤트 발행은 바꿔 끼우고, RabbitMQ까지는 DiagnosticsEventIntegrationTest가 본다.
+ *
+ * <p>실행 조건: 진짜 PostgreSQL이 필요하다(바탕 클래스 PostgresTestBase).
+ * GitHub Actions는 Docker(Testcontainers)로 띄우고, Docker가 없으면 {@code TRACE_IT_LOCAL=1}일 때 로컬 테스트 전용 DB
+ * trace_it에 붙는다. 둘 다 없으면 이 클래스 전체를 건너뛴다(실패가 아님).
  */
 @EnabledIf("com.gakdo.trace.diagnostics.support.PostgresTestBase#infrastructureAvailable")
 class DiagnosticsIntegrationTest extends PostgresTestBase {
