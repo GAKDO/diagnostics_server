@@ -39,6 +39,13 @@ curl http://localhost:8080/api/v1/diagnostics/ping
 
 Docker가 있으면 Testcontainers(PostgreSQL·RabbitMQ)로 통합 테스트를 돌립니다. Docker가 없는 세션은 로컬 PostgreSQL에 `createdb -U postgres trace_it`를 만들고 `TRACE_IT_LOCAL=1 ./mvnw verify`로 PostgreSQL 통합 테스트를 돌립니다(RabbitMQ 시험은 건너뜀).
 
+| 통합 테스트 | 필요한 것 | Docker 없을 때 |
+|---|---|---|
+| `DiagnosticsIntegrationTest`(업로드 → 저장 → 조회) | PostgreSQL | `TRACE_IT_LOCAL=1`이면 로컬 `trace_it`로 돌고, 아니면 건너뜀 |
+| `DiagnosticsEventIntegrationTest`(업로드 → `trace.diagnostics.recorded` 메시지) | PostgreSQL·RabbitMQ | 건너뜀 |
+
+나머지 단위·컨트롤러 테스트는 Docker 없이 늘 돕니다. 테스트마다 한국어 이름(`@DisplayName` 또는 한국어 메서드 이름)과 `[상황]`·`[기대]` 주석이 달려 있습니다.
+
 줄 커버리지 40% 미만이면 실패합니다(블로그와 같은 기준).
 
 ## CI/CD

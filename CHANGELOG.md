@@ -7,6 +7,7 @@ main에 버전이 적힌 CHANGELOG가 올라가면 release.yml이 태그와 GitH
 ## [Unreleased]
 
 ### 변경
+- CI: SonarQube 분석 뒤 품질 게이트 판정까지 기다려 실행 요약·경고·알림에 통과/실패를 남김(이미지 빌드·배포는 막지 않음)
 - 시리얼 대조를 같은 렌탈 앞선 진단 → AGENT 토큰 `deviceSerial`(렌탈 기기 등록 시리얼)로 바꿈. 클레임 없는 AGENT 토큰은 403. 시점 조회의 배터리에 `skippedReason` (contracts auth-server 0.2.0·diagnostics-server 0.3.0, 11/2 결정)
 
 ### 추가

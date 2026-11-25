@@ -14,6 +14,10 @@ public final class DiagnosticResults {
     public record RunCreated(String runId, List<Flag> flags) {
     }
 
+    /** 200 DiagnosticsRedo: 이전 진단으로 돌린 실행(지우지 않음) */
+    public record RunRedone(String checkpointId, String supersededRunId, OffsetDateTime supersededAt) {
+    }
+
     /** InspectionFlag */
     public record Flag(String kind, String baseRunId, Map<String, Object> detail) {
     }
@@ -28,8 +32,9 @@ public final class DiagnosticResults {
             RunChecks checks) {
     }
 
-    /** RunChecks: 잠금·디스크 상태(11/7 추가). 옛 에이전트 진단은 RunSummary.checks가 null */
-    public record RunChecks(String activationLock, String diskEncryption, String osDiskHealth) {
+    /** RunChecks: 잠금·디스크 상태(11/7 추가), 보안 보호·위협 건수(11/12 추가). 옛 에이전트 진단은 RunSummary.checks가 null */
+    public record RunChecks(String activationLock, String diskEncryption, String osDiskHealth,
+            String securityProtection, Integer threatCount) {
     }
 
     /**

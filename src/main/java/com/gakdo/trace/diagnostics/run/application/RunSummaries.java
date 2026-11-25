@@ -26,7 +26,8 @@ final class RunSummaries {
                 run.benchmarks().stream().map(b -> new BenchmarkSummary(b.metric(), b.median())).toList(),
                 run.checks() == null ? null
                         : new RunChecks(run.checks().activationLock(), run.checks().diskEncryption(),
-                                run.checks().osDiskHealth()));
+                                run.checks().osDiskHealth(), run.checks().securityProtection(),
+                                run.checks().threatCount()));
     }
 
     /** 공개 목록용: 부품·점검 결과는 읽지 않는다(지연 로딩 컬렉션을 건드리지 않게). */

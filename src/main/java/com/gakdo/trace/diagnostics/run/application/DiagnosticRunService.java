@@ -29,6 +29,7 @@ import com.gakdo.trace.diagnostics.common.infra.Times;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CatalogDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.CheckpointDiagnostics;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunCreated;
+import com.gakdo.trace.diagnostics.run.application.DiagnosticResults.RunRedone;
 import com.gakdo.trace.diagnostics.run.domain.BatteryReading;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticUpload;
@@ -46,6 +47,8 @@ import com.gakdo.trace.diagnostics.run.domain.InspectionFlag;
 public class DiagnosticRunService {
 
     private static final Logger log = LoggerFactory.getLogger(DiagnosticRunService.class);
+    /** 404 안내에 쓰는 대상 이름 */
+    private static final String CHECKPOINT_RUN = "이 시점의 진단";
 
     private final DiagnosticRunRepository runs;
     private final InspectionFlagRepository flags;
@@ -53,10 +56,13 @@ public class DiagnosticRunService {
     private final DiagnosticsEventPublisher events;
     private final ObjectMapper objectMapper;
     private final TransactionTemplate tx;
+    private final SealedCheckpointStore seals;
 
     public DiagnosticRunService(DiagnosticRunRepository runs, InspectionFlagRepository flags, DiagnosticSchema schema,
-            DiagnosticsEventPublisher events, ObjectMapper objectMapper, PlatformTransactionManager txManager) {
+            DiagnosticsEventPublisher events, ObjectMapper objectMapper, PlatformTransactionManager txManager,
+            SealedCheckpointStore seals) {
         this.runs = runs;
+        this.seals = seals;
         this.flags = flags;
         this.schema = schema;
         this.events = events;
@@ -77,7 +83,7 @@ public class DiagnosticRunService {
             return tx.execute(s -> store(caller, idempotencyKey, upload, rawBody, sha256));
         } catch (DataIntegrityViolationException race) {
             log.info("같은 시점 진단이 동시에 와서 먼저 저장된 것으로 답합니다: checkpoint={}", caller.scope());
-            return tx.execute(s -> runs.findByCheckpointId(caller.scope())
+            return tx.execute(s -> runs.findByCheckpointIdAndSupersededAtIsNull(caller.scope())
                     .map(existing -> replayOrReject(existing, idempotencyKey, sha256))
                     .orElseThrow(() -> race));
         }
@@ -89,7 +95,7 @@ public class DiagnosticRunService {
      */
     @Transactional(readOnly = true)
     public List<CatalogDiagnostics> catalog(Collection<String> checkpointIds) {
-        return runs.findByCheckpointIdIn(Set.copyOf(checkpointIds)).stream()
+        return runs.findByCheckpointIdInAndSupersededAtIsNull(Set.copyOf(checkpointIds)).stream()
                 .map(RunSummaries::catalog)
                 .toList();
     }
@@ -97,13 +103,38 @@ public class DiagnosticRunService {
     /** 시점의 진단 요약, 같은 렌탈 직전 시점 요약, 점검 플래그. */
     @Transactional(readOnly = true)
     public CheckpointDiagnostics checkpoint(Caller caller, String checkpointId) {
-        DiagnosticRun run = runs.findByCheckpointId(checkpointId)
-                .orElseThrow(() -> DomainException.notFound("이 시점의 진단"));
+        DiagnosticRun run = runs.findByCheckpointIdAndSupersededAtIsNull(checkpointId)
+                .orElseThrow(() -> DomainException.notFound(CHECKPOINT_RUN));
         caller.requireCanRead(run.rentalId());
-        Optional<DiagnosticRun> previous = runs.findFirstByRentalIdAndIdLessThanOrderByIdDesc(run.rentalId(), run.id());
+        Optional<DiagnosticRun> previous = runs.findFirstByRentalIdAndIdLessThanAndSupersededAtIsNullOrderByIdDesc(run.rentalId(), run.id());
         return new CheckpointDiagnostics(checkpointId, RunSummaries.of(run),
                 previous.map(RunSummaries::of).orElse(null),
                 RunSummaries.flags(flags.findByRunIdOrderById(run.id())));
+    }
+
+    /**
+     * 진단 다시 하기(11/13 민서 요청, ADMIN). 봉인 전 시점의 지금 진단을 지우지 않고 이전 진단으로 돌린다.
+     * 그 뒤 새 페어링 코드로 올린 진단이 그 시점의 지금 진단이 된다. 봉인된 시점은 409 RECORD_ALREADY_SEALED(위변조 방지).
+     */
+    @Transactional
+    public RunRedone redo(Caller caller, String checkpointId) {
+        if (!caller.isAdmin()) {
+            throw new DomainException(ErrorCode.FORBIDDEN, "관리자만 진단을 다시 할 수 있습니다.");
+        }
+        DiagnosticRun found = runs.findByCheckpointIdAndSupersededAtIsNull(checkpointId)
+                .orElseThrow(() -> DomainException.notFound(CHECKPOINT_RUN));
+        // 같은 렌탈 업로드와 직렬화한 뒤 다시 읽는다(동시에 올라온 업로드·다시 하기가 섞이지 않게)
+        runs.lockRental(found.rentalId());
+        DiagnosticRun current = runs.findByCheckpointIdAndSupersededAtIsNull(checkpointId)
+                .orElseThrow(() -> DomainException.notFound(CHECKPOINT_RUN));
+        if (seals.isSealed(checkpointId)) {
+            throw new DomainException(ErrorCode.RECORD_ALREADY_SEALED, "봉인된 시점의 진단은 다시 할 수 없습니다.");
+        }
+        OffsetDateTime now = Times.now();
+        current.supersede(now);
+        runs.saveAndFlush(current);
+        log.info("진단 다시 하기: checkpoint={} 이전 진단 run={}", checkpointId, current.publicId());
+        return new RunRedone(checkpointId, current.publicId(), now);
     }
 
     private DiagnosticUpload parse(byte[] body) {
@@ -140,7 +171,7 @@ public class DiagnosticRunService {
         String checkpointId = caller.scope();
         String rentalId = caller.rentalId();
         runs.lockRental(rentalId); // 같은 렌탈 업로드 직렬화: 앞선 진단 조회·시리얼 대조·저장이 한 번에 하나씩
-        Optional<DiagnosticRun> existing = runs.findByCheckpointId(checkpointId);
+        Optional<DiagnosticRun> existing = runs.findByCheckpointIdAndSupersededAtIsNull(checkpointId);
         if (existing.isPresent()) {
             return replayOrReject(existing.get(), idempotencyKey, sha256);
         }
@@ -149,7 +180,7 @@ public class DiagnosticRunService {
         if (!caller.deviceSerial().equals(upload.device().serial())) {
             throw new DomainException(ErrorCode.DEVICE_SERIAL_MISMATCH, "진단한 기기의 시리얼이 대여 기기와 다릅니다.");
         }
-        Optional<DiagnosticRun> base = runs.findFirstByRentalIdOrderByIdDesc(rentalId);
+        Optional<DiagnosticRun> base = runs.findFirstByRentalIdAndSupersededAtIsNullOrderByIdDesc(rentalId);
         OffsetDateTime now = Times.now();
         DiagnosticRun run = runs.saveAndFlush(DiagnosticRun.of(PublicIds.next(), checkpointId, rentalId,
                 idempotencyKey, upload, new DiagnosticRun.RawBody(rawBody, sha256), now));
@@ -160,6 +191,9 @@ public class DiagnosticRunService {
                 .orElse(List.of()));
         // 상태 플래그(잠금·디스크): 비교 대상이 없으므로 기준(baseRun)은 이번 진단 자신(contracts InspectionFlag 설명)
         FlagRules.states(run).forEach(d -> saved.add(new InspectionFlag(run, run, d.kind(), d.detail(), now)));
+        // 위협 건수(11/12): 앞 진단보다 늘었으면 기준은 앞 진단, 비교할 값이 없으면 이번 진단 자신
+        FlagRules.threat(base.orElse(null), run).ifPresent(t -> saved.add(new InspectionFlag(run,
+                t.compared() ? base.orElseThrow() : run, t.draft().kind(), t.draft().detail(), now)));
         flags.saveAll(saved);
         events.publishRecorded(new DiagnosticsRecordedEvent(DiagnosticsRecordedEvent.SCHEMA_VERSION,
                 PublicIds.next(), now, rentalId, checkpointId, run.publicId(), sha256,

@@ -146,6 +146,7 @@
   ],
   "checks": {
     "activationLock": "YES",
-    "diskEncryption": "OFF"
+    "diskEncryption": "OFF",
+    "osDiskHealth": null
   }
 }

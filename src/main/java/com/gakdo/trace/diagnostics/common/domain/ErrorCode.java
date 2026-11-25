@@ -15,6 +15,7 @@ public enum ErrorCode {
     IDEMPOTENCY_KEY_CONFLICT(HttpStatus.UNPROCESSABLE_ENTITY, "같은 요청 키로 다른 요청을 보냈습니다"),
     INTERNAL_ERROR(HttpStatus.INTERNAL_SERVER_ERROR, "서버 오류가 발생했습니다"),
     DIAGNOSTIC_ALREADY_UPLOADED(HttpStatus.CONFLICT, "이 시점의 진단은 이미 올라갔습니다"),
+    RECORD_ALREADY_SEALED(HttpStatus.CONFLICT, "이미 봉인된 시점입니다"),
     DIAGNOSTIC_SCHEMA_INVALID(HttpStatus.UNPROCESSABLE_ENTITY, "진단 결과 형식이 올바르지 않습니다"),
     DEVICE_SERIAL_MISMATCH(HttpStatus.UNPROCESSABLE_ENTITY, "렌탈 기기와 시리얼이 다릅니다");
 

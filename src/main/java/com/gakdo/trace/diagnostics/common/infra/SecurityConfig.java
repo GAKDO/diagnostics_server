@@ -48,6 +48,8 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.GET, "/api/v1/diagnostics/catalog").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/v1/diagnostics/runs").hasRole(AGENT)
                         .requestMatchers(HttpMethod.GET, "/api/v1/diagnostics/checkpoints/*").hasAnyRole(ADMIN, CUSTOMER)
+                        // 진단 다시 하기(11/13): 관리자만
+                        .requestMatchers(HttpMethod.POST, "/api/v1/diagnostics/checkpoints/*/redo").hasRole(ADMIN)
                         // 시점·렌탈 범위는 컨트롤러가 Caller로 다시 본다(gateway는 역할까지만, decisions.md 11/2)
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(o -> o

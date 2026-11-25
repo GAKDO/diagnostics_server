@@ -1,3 +1,6 @@
+// 이 파일이 확인하는 것: 렌탈 서버가 "시험 시점 지움" 이벤트를 보내면 진단 서버가 그 시점의 진단을 지우는 부분.
+// 잘못된 메시지는 지우지 않고 DLX(처리 못 한 메시지를 따로 모아 두는 곳)로 보낸다.
+
 package com.gakdo.trace.diagnostics.purge;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -32,6 +35,8 @@ class PurgeEventListenerTest {
                 + "\"deviceId\":\"Nq8sUe2ZpW4cYb6Td1MfA\",\"serial\":\"" + serial + "\"}").getBytes(StandardCharsets.UTF_8);
     }
 
+    // [상황] 시리얼 TEST-0002인 시험 시점의 지움 이벤트가 온다.
+    // [기대] 그 시점의 진단을 지운다.
     @Test
     @DisplayName("시험 시점 지움 이벤트를 받으면 그 시점의 진단을 지운다")
     void purgesTestCheckpoint() {
@@ -40,6 +45,8 @@ class PurgeEventListenerTest {
         verify(store).deleteCheckpoint(CP);
     }
 
+    // [상황] 실제 기기 시리얼(C02REAL0001) 이벤트와, 깨진 JSON 메시지가 온다.
+    // [기대] 둘 다 지우지 않고 DLX로 보낸다.
     @Test
     @DisplayName("시리얼이 TEST-가 아니거나 JSON이 깨졌으면 지우지 않고 DLX로 보낸다")
     void refusesRealOrBroken() {
@@ -50,6 +57,8 @@ class PurgeEventListenerTest {
         verify(store, never()).deleteCheckpoint(any());
     }
 
+    // [상황] 지우는 중에 DB 오류가 난다.
+    // [기대] 같은 메시지를 큐에 다시 넣지 않고 DLX로 보낸다(같은 실패가 끝없이 반복되는 것 방지).
     @Test
     @DisplayName("DB 오류는 다시 넣지 않고 DLX로 보낸다(재전달 무한 반복 방지)")
     void dbErrorGoesToDlx() {

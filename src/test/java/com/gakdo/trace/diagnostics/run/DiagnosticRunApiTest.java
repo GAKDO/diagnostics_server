@@ -1,3 +1,8 @@
+// 이 파일이 확인하는 것: 진단 서버 API 전체(올리기·다시 보내기·조회·권한·진단 다시 하기)를 화면 요청 수준에서 확인.
+// 실제 검증 규칙은 그대로 쓰고 DB 저장소만 가짜로 바꿔 끼워 Docker 없이 빠르게 돈다.
+// 진단 흐름: 고객 노트북의 에이전트가 6자리 페어링 코드로 AGENT 토큰을 받아 진단 결과(JSON)를 올리고,
+// 관리자·고객은 렌탈 리포트에서 시점별(출고 OUTBOUND, 반납 RETURN) 진단 요약을 본다.
+
 package com.gakdo.trace.diagnostics.run;
 
 import static com.gakdo.trace.diagnostics.support.TestJwts.OTHER_RENTAL;
@@ -52,6 +57,7 @@ import com.gakdo.trace.diagnostics.run.api.DiagnosticRunController;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticRunService;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticsEventPublisher;
 import com.gakdo.trace.diagnostics.run.application.DiagnosticsRecordedEvent;
+import com.gakdo.trace.diagnostics.run.application.SealedCheckpointStore;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticRun;
 import com.gakdo.trace.diagnostics.run.domain.DiagnosticUpload;
 import com.gakdo.trace.diagnostics.run.infra.DiagnosticRunRepository;
@@ -85,9 +91,12 @@ class DiagnosticRunApiTest extends WebTestBase {
     private DiagnosticsEventPublisher events;
     @MockitoBean
     private PlatformTransactionManager txManager;
+    @MockitoBean
+    private SealedCheckpointStore seals;
 
     private final AtomicLong ids = new AtomicLong();
 
+    // 테스트마다: 가짜 저장소가 저장할 때 DB처럼 내부 번호를 붙여 주도록 준비한다.
     @BeforeEach
     void saveAssignsId() {
         when(runs.saveAndFlush(any(DiagnosticRun.class))).thenAnswer(inv -> withId(inv.getArgument(0)));
@@ -101,6 +110,9 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // ---- 이야기 1: 진단 결과 올리기
 
+    // [상황] AGENT 토큰으로 올바른 맥 진단 결과를 올린다.
+    // [기대] 201, 새 진단 ID(21자 NanoID)와 빈 플래그 목록이 온다.
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("AGENT 토큰과 유효한 진단 JSON을 올리면 201, runId(NanoID)와 빈 flags")
     void uploadValidRun() throws Exception {
@@ -110,6 +122,8 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.flags").isEmpty());
     }
 
+    // [상황] 진단 결과를 올린다.
+    // [기대] 받은 본문 그대로의 SHA-256 해시와 원본 본문이 함께 저장된다(나중에 위변조 여부를 확인할 근거).
     @Test
     @DisplayName("저장된 sha256은 요청 본문 바이트 그대로의 SHA-256이고 원본 본문도 함께 남는다")
     void storesRawBodyAndHash() throws Exception {
@@ -124,6 +138,9 @@ class DiagnosticRunApiTest extends WebTestBase {
         assertThat(saved.getValue().rentalId()).isEqualTo(RENTAL);
     }
 
+    // [상황] 첫 진단을 올린다.
+    // [기대] "진단이 기록됨" 이벤트가 약속한 형식으로 한 번 나가고, 비교 기준(baseRunId)은 null,
+    //        배터리 최대 용량은 89.02%로 실린다(리포트 서버가 받아 배터리 칸에 씀).
     @Test
     @DisplayName("업로드하면 trace.diagnostics.recorded 이벤트 하나가 계약 스키마대로 나가고, 첫 진단은 baseRunId가 null")
     void publishesRecordedEvent() throws Exception {
@@ -140,13 +157,16 @@ class DiagnosticRunApiTest extends WebTestBase {
         assertThat(EventSchemas.validateRecorded(objectMapper.valueToTree(event))).isEmpty();
     }
 
+    // [상황] 로그인 없이 공개 진단 요약을 조회하고, 잘못된 ID로도 조회한다.
+    // [기대] 배터리·벤치마크만 보이고 부품·잠금 상태·시리얼 같은 민감한 값은 빠진다. 잘못된 ID는 400.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("공개 진단 요약은 로그인 없이 배터리·벤치마크를 주고, 부품·잠금·시리얼은 싣지 않으며 잘못된 ID는 400")
     void publicCatalogHidesComponents() throws Exception {
         upload(Examples.bytes(Examples.MACOS), agent()).andExpect(status().isCreated());
         ArgumentCaptor<DiagnosticRun> saved = ArgumentCaptor.forClass(DiagnosticRun.class);
         verify(runs).saveAndFlush(saved.capture());
-        when(runs.findByCheckpointIdIn(any())).thenReturn(List.of(saved.getValue()));
+        when(runs.findByCheckpointIdInAndSupersededAtIsNull(any())).thenReturn(List.of(saved.getValue()));
 
         mvc.perform(get("/api/v1/diagnostics/catalog?checkpointIds=" + OUTBOUND + "," + OUTBOUND))
                 .andExpect(status().isOk())
@@ -159,6 +179,8 @@ class DiagnosticRunApiTest extends WebTestBase {
         mvc.perform(get("/api/v1/diagnostics/catalog?checkpointIds=bad")).andExpect(status().isBadRequest());
     }
 
+    // [상황] 활성화 잠금이 켜진 노트북을 출고 때 처음 진단한다.
+    // [기대] 앞 진단이 없어도 ACTIVATION_LOCK_ON 플래그가 붙고, 그 기준은 이번 진단 자신이다.
     @Test
     @DisplayName("활성화 잠금이 켜진 첫 진단(출고)도 ACTIVATION_LOCK_ON 플래그가 붙고 baseRunId는 이번 진단 자신이다")
     void lockedOutboundGetsStateFlag() throws Exception {
@@ -175,17 +197,22 @@ class DiagnosticRunApiTest extends WebTestBase {
         assertThat(saved.getValue().publicId()).isEqualTo(runId);
     }
 
+    // [상황] 같은 렌탈에 출고 진단이 있는 상태에서 반납 진단을 올린다.
+    // [기대] 이벤트의 비교 기준(baseRunId)이 바로 앞 출고 진단의 ID다.
     @Test
     @DisplayName("같은 렌탈에 앞선 진단이 있으면 이벤트 baseRunId는 바로 앞 실행의 runId")
     void baseRunIdIsPreviousRun() throws Exception {
         DiagnosticRun outbound = stored(OUTBOUND, RENTAL, Examples.MACOS, "outbound-key-01");
-        when(runs.findFirstByRentalIdOrderByIdDesc(RENTAL)).thenReturn(Optional.of(outbound));
+        when(runs.findFirstByRentalIdAndSupersededAtIsNullOrderByIdDesc(RENTAL)).thenReturn(Optional.of(outbound));
         upload(Examples.bytes(Examples.MACOS), agent(RETURN, RENTAL)).andExpect(status().isCreated());
         DiagnosticsRecordedEvent event = publishedEvent();
         assertThat(event.baseRunId()).isEqualTo(outbound.publicId());
         assertThat(EventSchemas.validateRecorded(objectMapper.valueToTree(event))).isEmpty();
     }
 
+    // [상황] 약속한 형식에 맞지 않는 진단 결과를 올린다.
+    // [기대] 422 DIAGNOSTIC_SCHEMA_INVALID, 저장도 이벤트도 없다.
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("스키마에 맞지 않는 결과는 422 DIAGNOSTIC_SCHEMA_INVALID로 거부되고 저장·이벤트가 없다")
     void schemaInvalidIsRejected() throws Exception {
@@ -201,6 +228,8 @@ class DiagnosticRunApiTest extends WebTestBase {
         verify(events, never()).publishRecorded(any());
     }
 
+    // [상황] 개인정보인 컴퓨터 이름(computerName)이 들어간 진단을 올린다.
+    // [기대] 오류에 device.computerName 위치가 나온다.
     @Test
     @DisplayName("모르는 키 computerName은 필드 경로 device.computerName으로 알려 준다")
     void unknownKeyPath() throws Exception {
@@ -208,6 +237,9 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.errors[0].field").value("device.computerName"));
     }
 
+    // [상황] 형식은 맞지만 벤치마크 중앙값이 측정값들의 가운데 값이 아니다.
+    // [기대] 422 DIAGNOSTIC_SCHEMA_INVALID(서버 업무 규칙 위반).
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("스키마는 통과해도 median이 가운데 값이 아니면 422 DIAGNOSTIC_SCHEMA_INVALID")
     void serverRuleViolationIsRejected() throws Exception {
@@ -219,6 +251,9 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.errors[0].field").value("benchmarks[0].median"));
     }
 
+    // [상황] 본문이 JSON이 아니다.
+    // [기대] 400 VALIDATION_FAILED.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("본문이 JSON이 아니면 400 VALIDATION_FAILED")
     void notJsonIsBadRequest() throws Exception {
@@ -227,6 +262,9 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"));
     }
 
+    // [상황] SSD 검사를 권한이 없어 건너뛴 진단을 올린다.
+    // [기대] 201. SSD 값은 비어 있고(null) 건너뛴 사유가 그대로 저장된다("못 읽은 값은 None + 사유" 원칙).
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("SSD를 권한이 없어 건너뛰면 201이고 값은 null, 사유는 그대로 저장된다")
     void skippedStorageIsStoredWithReason() throws Exception {
@@ -238,6 +276,8 @@ class DiagnosticRunApiTest extends WebTestBase {
         assertThat(saved.getValue().ssd().percentUsed()).isNull();
     }
 
+    // [상황] 충전기를 꽂지 않아 벤치마크를 건너뛴 진단을 올린다.
+    // [기대] 사유 NO_AC_POWER가 저장된다(배터리만으로 재면 성능이 낮게 나오므로 재지 않음).
     @Test
     @DisplayName("전원 없이 벤치마크를 건너뛰면 사유 NO_AC_POWER가 저장된다")
     void benchmarkSkipReasonIsStored() throws Exception {
@@ -253,6 +293,9 @@ class DiagnosticRunApiTest extends WebTestBase {
         assertThat(saved.getValue().benchmarks()).isEmpty();
     }
 
+    // [상황] 진단한 기기의 시리얼이 AGENT 토큰에 적힌 렌탈 기기 시리얼과 다르다(다른 노트북을 진단).
+    // [기대] 422 DEVICE_SERIAL_MISMATCH, 저장·이벤트 없음.
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("진단한 기기 시리얼이 AGENT 토큰의 등록 시리얼과 다르면 422 DEVICE_SERIAL_MISMATCH, 저장·이벤트 없음")
     void serialMismatchIsRejected() throws Exception {
@@ -263,6 +306,8 @@ class DiagnosticRunApiTest extends WebTestBase {
         verify(events, never()).publishRecorded(any());
     }
 
+    // [상황] 앞선 진단이 없는 첫 진단에서 시리얼이 다른 경우와 같은 경우.
+    // [기대] 다르면 거부, 같으면 저장된다. 첫 진단도 등록된 기기인지 확인한다.
     @Test
     @DisplayName("첫 진단이라도 등록 시리얼과 다르면 거부하고, 같으면 앞선 진단 없이도 저장한다")
     void serialIsCheckedAgainstClaimEvenOnFirstRun() throws Exception {
@@ -272,6 +317,9 @@ class DiagnosticRunApiTest extends WebTestBase {
         upload(Examples.bytes(Examples.WINDOWS), pcAgent()).andExpect(status().isCreated());
     }
 
+    // [상황] 기기 시리얼이 들어 있지 않은 예전 방식의 AGENT 토큰으로 올린다.
+    // [기대] 403 FORBIDDEN(어느 기기인지 확인할 수 없으므로 받지 않음).
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("deviceSerial 클레임이 없는 AGENT 토큰(예전 페어링 코드)은 403 FORBIDDEN")
     void agentWithoutSerialIsForbidden() throws Exception {
@@ -283,11 +331,14 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // ---- 이야기 2: 다시 보내기와 중복
 
+    // [상황] 네트워크가 끊겨 에이전트가 같은 요청 키·같은 본문으로 다시 보낸다.
+    // [기대] 처음과 같은 응답(201, 같은 runId)을 돌려주고 새 진단·이벤트를 만들지 않는다.
+    //        ※ 응답 코드: 201 = 새로 만들어짐
     @Test
     @DisplayName("같은 키·같은 본문으로 다시 보내면 처음 응답(201, 같은 runId)이고 새 행·이벤트가 없다")
     void sameKeySameBodyReplays() throws Exception {
         DiagnosticRun existing = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(existing));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(existing));
         upload(Examples.bytes(Examples.MACOS), agent())
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.runId").value(existing.publicId()))
@@ -296,25 +347,34 @@ class DiagnosticRunApiTest extends WebTestBase {
         verify(events, never()).publishRecorded(any());
     }
 
+    // [상황] 같은 요청 키로 내용이 다른 진단을 보낸다.
+    // [기대] 422 IDEMPOTENCY_KEY_CONFLICT(키 재사용 오류).
+    //        ※ 응답 코드: 422 = 형식은 맞지만 내용이 규칙에 어긋남
     @Test
     @DisplayName("같은 키에 다른 본문이면 422 IDEMPOTENCY_KEY_CONFLICT")
     void sameKeyOtherBodyConflicts() throws Exception {
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
         upload(Examples.bytes(Examples.SSD_SKIPPED), agent())
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_CONFLICT"));
     }
 
+    // [상황] 이미 진단이 있는 시점에 다른 키로 또 올린다.
+    // [기대] 409 DIAGNOSTIC_ALREADY_UPLOADED. 한 시점에는 진단 하나만(바꾸려면 관리자의 "진단 다시 하기").
+    //        ※ 응답 코드: 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
     @Test
     @DisplayName("이미 진단이 있는 시점에 다른 키로 올리면 409 DIAGNOSTIC_ALREADY_UPLOADED")
     void secondUploadOnCheckpointConflicts() throws Exception {
-        when(runs.findByCheckpointId(OUTBOUND))
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND))
                 .thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, "first-key-0001")));
         upload(Examples.bytes(Examples.MACOS), agent())
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("DIAGNOSTIC_ALREADY_UPLOADED"));
     }
 
+    // [상황] 요청 키(Idempotency-Key)가 없거나 8자보다 짧다.
+    // [기대] 400 VALIDATION_FAILED.
+    //        ※ 응답 코드: 400 = 요청 내용이 형식에 맞지 않음
     @Test
     @DisplayName("Idempotency-Key가 없거나 8자 미만이면 400 VALIDATION_FAILED")
     void idempotencyKeyRequired() throws Exception {
@@ -330,11 +390,13 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // ---- 이야기 3: 리포트용 시점 진단 조회
 
+    // [상황] 출고 시점의 진단 요약을 조회한다.
+    // [기대] 배터리·SSD·부품·벤치마크 요약이 오고, 앞 시점(previous)은 없으며 플래그는 빈 목록.
     @Test
     @DisplayName("출고 시점 조회: 배터리·SSD·부품·벤치마크 요약, previous는 null, flags는 빈 배열")
     void checkpointSummary() throws Exception {
         DiagnosticRun run = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(run));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.checkpointId").value(OUTBOUND))
@@ -355,13 +417,15 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.flags").isEmpty());
     }
 
+    // [상황] 반납 시점을 조회한다.
+    // [기대] previous에 같은 렌탈의 바로 앞 시점(출고) 요약이 함께 와서, 리포트가 한 번의 조회로 두 시점을 비교할 수 있다.
     @Test
     @DisplayName("반납 시점 조회의 previous는 같은 렌탈 직전 시점 요약이다(두 번 측정한 값을 한 번의 조회로)")
     void checkpointWithPrevious() throws Exception {
         DiagnosticRun outbound = stored(OUTBOUND, RENTAL, Examples.SSD_SKIPPED, "outbound-key-01");
         DiagnosticRun returned = stored(RETURN, RENTAL, Examples.WINDOWS, KEY);
-        when(runs.findByCheckpointId(RETURN)).thenReturn(Optional.of(returned));
-        when(runs.findFirstByRentalIdAndIdLessThanOrderByIdDesc(eq(RENTAL), anyLong()))
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(RETURN)).thenReturn(Optional.of(returned));
+        when(runs.findFirstByRentalIdAndIdLessThanAndSupersededAtIsNullOrderByIdDesc(eq(RENTAL), anyLong()))
                 .thenReturn(Optional.of(outbound));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + RETURN).with(customer(RENTAL)))
                 .andExpect(status().isOk())
@@ -372,6 +436,8 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.previous.ssd.skippedReason").value("NO_PERMISSION"));
     }
 
+    // [상황] 배터리가 없는 기기(데스크톱 등, NO_BATTERY)의 진단을 조회한다.
+    // [기대] battery 값이 null이다.
     @Test
     @DisplayName("배터리가 없는 기기(NO_BATTERY)는 battery가 null")
     void noBatteryIsNull() throws Exception {
@@ -385,12 +451,14 @@ class DiagnosticRunApiTest extends WebTestBase {
             b.putNull("osMaxCapacityPercent");
             b.putNull("osCondition");
         }), KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(run));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.current.battery").doesNotExist());
     }
 
+    // [상황] 배터리를 읽지 못한 진단을 조회한다.
+    // [기대] battery 값은 null이고 skippedReason에 못 읽은 사유 코드가 나온다.
     @Test
     @DisplayName("배터리를 읽지 못했으면 battery 값은 null이고 skippedReason에 사유 코드가 나온다")
     void skippedBatteryShowsReason() throws Exception {
@@ -404,7 +472,7 @@ class DiagnosticRunApiTest extends WebTestBase {
             b.putNull("osMaxCapacityPercent");
             b.putNull("osCondition");
         }), KEY);
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(run));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(admin()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.current.battery.skippedReason").value("NO_PERMISSION"))
@@ -412,10 +480,13 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.current.battery.maxCapacityPct").doesNotExist());
     }
 
+    // [상황] 다른 렌탈의 고객, QR 촬영 전용 토큰, 진단이 없는 시점으로 조회한다.
+    // [기대] 다른 렌탈 고객은 403 OUT_OF_SCOPE, 촬영 토큰은 403 FORBIDDEN, 진단 없는 시점은 404.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일), 404 = 찾을 수 없음(없는 주소나 데이터)
     @Test
     @DisplayName("다른 렌탈 고객은 403 OUT_OF_SCOPE, 촬영 JWT는 403 FORBIDDEN, 진단 없는 시점은 404")
     void checkpointScope() throws Exception {
-        when(runs.findByCheckpointId(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(stored(OUTBOUND, RENTAL, Examples.MACOS, KEY)));
         mvc.perform(get("/api/v1/diagnostics/checkpoints/" + OUTBOUND).with(customer(OTHER_RENTAL)))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("OUT_OF_SCOPE"));
@@ -431,6 +502,9 @@ class DiagnosticRunApiTest extends WebTestBase {
 
     // ---- 이야기 4: 범위 확인
 
+    // [상황] 관리자·고객·부스 토큰으로 진단을 올리고, 에이전트 토큰으로 조회해 본다.
+    // [기대] 모두 403. 진단을 올리는 건 에이전트만, 조회는 에이전트가 못 한다.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("ADMIN·CUSTOMER·BOOTH 토큰으로 업로드하면 403, AGENT로 조회하면 403")
     void rolesAreChecked() throws Exception {
@@ -442,6 +516,9 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(jsonPath("$.code").value("FORBIDDEN"));
     }
 
+    // [상황] AGENT 토큰 안의 시점 ID나 렌탈 ID가 올바른 21자 NanoID 형식이 아니다.
+    // [기대] 403 FORBIDDEN.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
     @Test
     @DisplayName("AGENT 토큰의 scope나 rentalId가 NanoID가 아니면 403 FORBIDDEN")
     void agentClaimsMustBePublicIds() throws Exception {
@@ -452,6 +529,9 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .andExpect(status().isForbidden());
     }
 
+    // [상황] 토큰 없이 부른다.
+    // [기대] 401 UNAUTHENTICATED.
+    //        ※ 응답 코드: 401 = 로그인 필요(토큰이 없거나 만료·위조됨)
     @Test
     @DisplayName("토큰이 없으면 401 UNAUTHENTICATED")
     void unauthenticated() throws Exception {
@@ -459,6 +539,82 @@ class DiagnosticRunApiTest extends WebTestBase {
                 .content(Examples.bytes(Examples.MACOS)))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
+    }
+
+    // ---- 진단 다시 하기(11/13)
+
+    private static String redoPath(String checkpointId) {
+        return "/api/v1/diagnostics/checkpoints/" + checkpointId + "/redo";
+    }
+
+    // [상황] 봉인 전 출고 시점에서 관리자가 "진단 다시 하기"를 누른다(예: 충전기 없이 잘못 잰 경우).
+    // [기대] 200. 지금 진단을 지우지 않고 "이전 진단"으로 넘겨 기록을 남긴다.
+    //        ※ 응답 코드: 200 = 정상 처리됨
+    @Test
+    @DisplayName("봉인 전 시점에서 관리자가 진단 다시 하기를 하면 200이고, 지금 진단은 지우지 않고 이전 진단으로 남는다")
+    void adminRedoSupersedesCurrentRun() throws Exception {
+        DiagnosticRun run = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
+        mvc.perform(post(redoPath(OUTBOUND)).with(admin()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.checkpointId").value(OUTBOUND))
+                .andExpect(jsonPath("$.supersededRunId").value(run.publicId()))
+                .andExpect(jsonPath("$.supersededAt").isNotEmpty());
+        assertThat(run.supersededAt()).isNotNull();
+        verify(runs).saveAndFlush(run);
+        verify(runs).lockRental(RENTAL);
+        verify(runs, never()).delete(any());
+    }
+
+    // [상황] 이미 봉인된 시점에서 "진단 다시 하기"를 누른다.
+    // [기대] 409 RECORD_ALREADY_SEALED, 지금 진단은 그대로다.
+    //        ※ 응답 코드: 409 = 지금 상태와 맞지 않아 거절(이미 있음·순서 어긋남 등)
+    @Test
+    @DisplayName("봉인된 시점은 진단 다시 하기가 409 RECORD_ALREADY_SEALED이고 지금 진단은 그대로다")
+    void sealedCheckpointCannotRedo() throws Exception {
+        DiagnosticRun run = stored(OUTBOUND, RENTAL, Examples.MACOS, KEY);
+        when(runs.findByCheckpointIdAndSupersededAtIsNull(OUTBOUND)).thenReturn(Optional.of(run));
+        when(seals.isSealed(OUTBOUND)).thenReturn(true);
+        mvc.perform(post(redoPath(OUTBOUND)).with(admin()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("RECORD_ALREADY_SEALED"));
+        assertThat(run.supersededAt()).isNull();
+        verify(runs, never()).saveAndFlush(any());
+    }
+
+    // [상황] 진단이 아직 없는 시점에서 "진단 다시 하기"를 누른다.
+    // [기대] 404.
+    //        ※ 응답 코드: 404 = 찾을 수 없음(없는 주소나 데이터)
+    @Test
+    @DisplayName("지금 진단이 없는 시점의 진단 다시 하기는 404")
+    void redoWithoutRunIsNotFound() throws Exception {
+        mvc.perform(post(redoPath(OUTBOUND)).with(admin()))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("NOT_FOUND"));
+    }
+
+    // [상황] 고객 토큰과 에이전트 토큰으로 "진단 다시 하기"를 부른다.
+    // [기대] 둘 다 403. 관리자만 할 수 있다.
+    //        ※ 응답 코드: 403 = 권한 없음(누구인지는 알지만 허락되지 않은 일)
+    @Test
+    @DisplayName("진단 다시 하기는 관리자만: 고객·에이전트 토큰은 403")
+    void redoIsAdminOnly() throws Exception {
+        mvc.perform(post(redoPath(OUTBOUND)).with(customer(RENTAL)))
+                .andExpect(status().isForbidden());
+        mvc.perform(post(redoPath(OUTBOUND)).with(agent()))
+                .andExpect(status().isForbidden());
+        verify(runs, never()).saveAndFlush(any());
+    }
+
+    // [상황] "진단 다시 하기"로 지금 진단이 비워진 시점에 새 진단을 올린다.
+    // [기대] 201로 저장된다.
+    //        ※ 응답 코드: 201 = 새로 만들어짐
+    @Test
+    @DisplayName("진단 다시 하기 뒤에는 같은 시점에 새 진단을 올릴 수 있다(지금 진단이 없으므로 201)")
+    void uploadAfterRedoIsStored() throws Exception {
+        // 다시 하기로 지금 진단이 비면 조회는 빈 값이다(Mockito 기본). 새 키로 올리면 저장된다
+        upload(Examples.bytes(Examples.MACOS), agent()).andExpect(status().isCreated());
+        verify(runs).saveAndFlush(any(DiagnosticRun.class));
     }
 
     // ---- 도우미
