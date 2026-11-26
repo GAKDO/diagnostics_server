@@ -27,12 +27,18 @@ import com.gakdo.trace.diagnostics.run.infra.SealEventListener;
 /** trace.record.sealed 소비(11/13 진단 다시 하기 잠금). Docker 없이 돈다. */
 class SealEventListenerTest {
 
+    // 시험용 시점 ID
     private static final String CP = "h40b9AN9xMQhXRHrOyJWB";
 
+    // (도구) mock(종류) = 진짜 대신 가짜 객체를 만든다. DB 없이 봉인 기록을 불렀는지만 보려고
+    // 봉인 시점 저장소(가짜)
     private final SealedCheckpointStore store = mock(SealedCheckpointStore.class);
+    // 시험할 봉인 이벤트 리스너
     private final SealEventListener listener = new SealEventListener(store, new ObjectMapper());
 
+    // 테스트 도구: 그 시점·서명 시각(없으면 빼고)으로 "봉인됨" 이벤트 JSON을 바이트로 만든다
     private static byte[] sealed(String checkpointId, String signedAt) {
+        // 이벤트 칸을 이어 붙여 UTF-8 바이트로 돌려준다
         return ("{\"schemaVersion\":\"1.0\",\"eventId\":\"Pg2pQx7LmVb0RtYs9WkDe\",\"occurredAt\":\"2026-11-13T11:00:00+09:00\","
                 + "\"rentalId\":\"Ws0HLv6QRbDILPWOcz5I2\",\"checkpointId\":\"" + checkpointId + "\",\"seq\":1,"
                 + "\"checkpointType\":\"OUT\",\"grade\":\"A\",\"payloadHash\":\"" + "a".repeat(64) + "\",\"prevHash\":null"
@@ -41,11 +47,18 @@ class SealEventListenerTest {
 
     // [상황] 서명 시각(signedAt)이 들어 있는 봉인 이벤트가 온다.
     // [기대] 그 시점을 봉인으로 기록하고, 봉인 시각은 signedAt을 쓴다.
+    // (도구) @Test = JUnit에게 "이 메서드가 테스트 하나"라고 알리는 표시. @DisplayName = 결과 화면에 보일 한글 이름
     @Test
     @DisplayName("봉인 이벤트를 받으면 그 시점을 봉인으로 기록하고 시각은 signedAt을 쓴다")
     void recordsSealedCheckpoint() {
+        // (도구) when(가짜.메서드(조건)).thenReturn(결과) = 미리 답을 정해 둔다. eq(값) = 그 값일 때, any() = 아무 값이나
+        // 준비: 그 시점을 봉인으로 기록하면 true(새로 기록함)를 돌려주게 한다
         when(store.markSealed(eq(CP), any())).thenReturn(true);
+        // (도구) assertThat(값).isTrue() = 값이 true여야 통과하는 AssertJ 검사
+        // 실행+확인: 서명 시각이 있는 봉인 이벤트를 처리하면 true여야 한다
         assertThat(listener.handle(sealed(CP, "2026-11-13T11:00:05+09:00"))).isTrue();
+        // (도구) verify(가짜).메서드(값...) = 그 값들로 (한 번) 불렸는지 확인
+        // 확인: 봉인 시각으로 signedAt(11:00:05)을 썼어야 한다
         verify(store).markSealed(CP, OffsetDateTime.parse("2026-11-13T11:00:05+09:00"));
     }
 
@@ -54,7 +67,9 @@ class SealEventListenerTest {
     @Test
     @DisplayName("signedAt이 없으면 봉투의 occurredAt을 봉인 시각으로 쓴다")
     void fallsBackToOccurredAt() {
+        // 실행: 서명 시각이 없는 봉인 이벤트를 처리한다
         listener.handle(sealed(CP, null));
+        // 확인: 봉인 시각으로 occurredAt(11:00:00)을 썼어야 한다
         verify(store).markSealed(CP, OffsetDateTime.parse("2026-11-13T11:00:00+09:00"));
     }
 
@@ -63,12 +78,21 @@ class SealEventListenerTest {
     @Test
     @DisplayName("JSON이 아니거나 checkpointId가 NanoID가 아니면 기록하지 않고 DLX로 보낸다")
     void malformedGoesToDlx() {
+        // 준비: JSON이 아닌 메시지
         byte[] notJson = "not json".getBytes(StandardCharsets.UTF_8);
+        // 준비: 시점 ID가 21자 형식이 아닌 이벤트
         byte[] badId = sealed("bad", null);
+        // (도구) assertThatThrownBy(() -> 코드).isInstanceOf(예외) = 그 코드를 돌리면 이 종류의 예외가 나야 통과
+        // 실행+확인: JSON이 아닌 메시지를 처리하면
         assertThatThrownBy(() -> listener.handle(notJson))
+                // DLX로 보내는 예외가 나야 한다
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        // 실행+확인: 시점 ID가 틀린 이벤트를 처리하면
         assertThatThrownBy(() -> listener.handle(badId))
+                // DLX로 보내는 예외가 나야 한다
                 .isInstanceOf(AmqpRejectAndDontRequeueException.class);
+        // (도구) never() = 한 번도 불리지 않았어야 통과
+        // 확인: 봉인으로 기록하지 않았어야 한다
         verify(store, never()).markSealed(anyString(), any());
     }
 }
