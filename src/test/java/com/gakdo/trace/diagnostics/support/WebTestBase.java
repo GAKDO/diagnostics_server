@@ -9,6 +9,7 @@ import com.gakdo.trace.diagnostics.common.api.ProblemAdvice;
 import com.gakdo.trace.diagnostics.common.infra.SecurityConfig;
 
 /** WebMvc 시험이 운영과 같은 보안 규칙·오류 형식을 쓰게 한다. */
+// (도구) @Import = 함께 띄울 부품을 고른다. 운영 보안 규칙(SecurityConfig)과 오류 응답 형식(ProblemAdvice)을 싣는다
 @Import({SecurityConfig.class, ProblemAdvice.class})
 public abstract class WebTestBase {
 }
